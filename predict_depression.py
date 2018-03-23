@@ -17,7 +17,7 @@ from keras.utils import to_categorical
 
 from models import convnet
 
-data_dir = 'E:/brains/PAC2018/'
+data_dir = '/data1/users/adoyle/PAC2018/'
 image_size = (256, 256, 256)
 
 
