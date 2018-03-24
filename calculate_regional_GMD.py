@@ -57,7 +57,7 @@ if __name__ == '__main__':
         Parallel(n_jobs=4)(delayed(process_file)(f) for f in os.listdir(img_dir))
 
     # Let's check the size of the PAC2018 niftis
-    filename = os.path.join('C:/Users/joshu/Desktop/PAC2018/', 'PAC2018_0001.nii')
+    filename = os.path.join(img_dir, 'PAC2018_0001.nii')
     img = nib.load(filename)
 
     print(img.shape)
