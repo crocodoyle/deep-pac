@@ -46,7 +46,7 @@ def process_file(file):
                     idx = np.where(atlas_img_data == r)
                     local_gmd = resampled_img_data[idx]
                     gmd_mean[r, 1] = np.mean(local_gmd)
-                    gmd_var[r, 1] = np.variance(local_gmd)
+                    gmd_var[r, 1] = np.var(local_gmd)
 
                 np.savetxt(dest_filename_mean, gmd_mean)
                 np.savetxt(dest_filename_var, gmd_var)
