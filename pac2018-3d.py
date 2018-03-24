@@ -60,7 +60,7 @@ def pac2018_3d_cae_model():
     model.add(UpSampling3D(pool_size))
     model.add(Conv3DTranspose(8, conv_size, activation='relu'))
 
-    model.add(Conv3DTranspose(1, conv_size, activation='relu'))
+    model.add(Conv3DTranspose(1, conv_size, activation='softmax'))
 
     model.summary()
     # Reshape to original size
