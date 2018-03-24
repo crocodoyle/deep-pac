@@ -9,8 +9,8 @@ import nibabel as nib
 from nibabel.processing import resample_from_to
 from skimage.exposure import equalize_hist
 
-data_dir = '~/pac2018_root/'
-output_dir = '~/pac2018_root/'
+data_dir = os.path.expanduser('~/pac2018_root/')
+output_dir = os.path.expanduser('~/pac2018_root/')
 
 output_file = output_dir + 'pac2018.hdf5'
 

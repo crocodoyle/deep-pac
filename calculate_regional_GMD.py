@@ -4,7 +4,7 @@ import numpy as np
 from nilearn.image import resample_to_img
 from joblib import Parallel, delayed
 
-img_dir = '~/pac2018_root/'
+img_dir = os.path.expanduser('~/pac2018_root/')
 
 atlas_name = 'brainnetome'
 
@@ -14,7 +14,7 @@ else:
     atlas_filename = os.path.join(img_dir,
                                   'vols/rcorrected_rwOASIS-TRT-20_DKT31_CMA_jointfusion_labels_in_MNI152_onlyGM.nii')
 
-generate_GMD_files = False
+generate_GMD_files = True
 
 
 def process_file(file):
@@ -29,22 +29,27 @@ def process_file(file):
             print("Processing %s" % file)
             img_filename = os.path.join(img_dir, file)
             filename_no_ext = file[:-4]
-            dest_filename = os.path.join(img_dir, filename_no_ext + '_GM-' + atlas_name + '.txt')
+            dest_filename_mean = os.path.join(img_dir, filename_no_ext + '_GM-mean-' + atlas_name + '.txt')
+            dest_filename_var = os.path.join(img_dir, filename_no_ext + '_GM-var-' + atlas_name + '.txt')
 
-            if not os.path.exists(dest_filename):
+            if not os.path.exists(dest_filename_mean):
                 img = nib.load(img_filename)
                 resampled_img = resample_to_img(img, atlas_img)
                 resampled_img_data = resampled_img.get_data()
 
-                gmd = np.zeros((len(regions), 2))
-                gmd[:, 0] = regions
+                gmd_mean = np.zeros((len(regions), 2))
+                gmd_var = np.zeros((len(regions), 2))
+                gmd_mean[:, 0] = regions
+                gmd_var[:, 0] = regions
                 for region in regions:
                     r = int(region)
                     idx = np.where(atlas_img_data == r)
                     local_gmd = resampled_img_data[idx]
-                    gmd[r, 1] = np.mean(local_gmd)
+                    gmd_mean[r, 1] = np.mean(local_gmd)
+                    gmd_var[r, 1] = np.variance(local_gmd)
 
-                np.savetxt(dest_filename, gmd)
+                np.savetxt(dest_filename_mean, gmd_mean)
+                np.savetxt(dest_filename_var, gmd_var)
 
 
 if __name__ == '__main__':
