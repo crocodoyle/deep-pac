@@ -4,7 +4,7 @@ import numpy as np
 from nilearn.image import resample_to_img
 from joblib import Parallel, delayed
 
-img_dir = 'C:/Users/joshu/Desktop/PAC2018'
+img_dir = '~/pac2018_root/'
 
 atlas_name = 'brainnetome'
 
