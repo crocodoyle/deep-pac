@@ -19,7 +19,7 @@ from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
 from custom_loss import sensitivity, specificity
 
-workdir = '/data1/users/jmorse/pac2018/'
+workdir = '~/pac2018_root/'
 data_file = 'pac2018.hdf5'
 
 image_size = (152, 152, 152)#(121, 145, 121)

@@ -9,8 +9,8 @@ import nibabel as nib
 from nibabel.processing import resample_from_to
 from skimage.exposure import equalize_hist
 
-data_dir = '/data1/users/jmorse/'
-output_dir = '/data1/users/jmorse/pac2018/'
+data_dir = '~/pac2018_root/'
+output_dir = '~/pac2018_root/'
 
 output_file = output_dir + 'pac2018.hdf5'
 
@@ -193,7 +193,7 @@ def check_datasets():
     plt.savefig(output_dir + 'dataset_histograms.png', bbox_inches='tight')
 
 if __name__ == "__main__":
-    n_pac2018 = count_pac2018(data_dir + '/pac2018/', 'PAC2018Covariates_and_regional_GMD.csv')
+    n_pac2018 = count_pac2018(data_dir, 'PAC2018Covariates_and_regional_GMD.csv')
 
     print('Subjects with labels:')
     print('PAC2018:', n_pac2018)
@@ -208,7 +208,7 @@ if __name__ == "__main__":
         f.create_dataset('dataset', (total_subjects,), dtype=dt)
 
         print('Starting PAC2018...')
-        next_index = make_pac2018(data_dir + '/pac2018/', f, 'PAC2018Covariates_and_regional_GMD.csv', 0)
+        next_index = make_pac2018(data_dir, f, 'PAC2018Covariates_and_regional_GMD.csv', 0)
         pac2018_indices = range(0, next_index)
         print('Last PAC2018 index:', next_index - 1)
 
