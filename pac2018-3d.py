@@ -224,7 +224,7 @@ if __name__ == "__main__":
     # print summary of model
     model.summary()
 
-    num_epochs = 1
+    num_epochs = 10
 
     model_checkpoint = ModelCheckpoint(workdir + 'best_3d_cae_model.hdf5',
                                        monitor="val_acc",
@@ -239,7 +239,7 @@ if __name__ == "__main__":
         validation_steps=len(validation_indices)
     )
 
-    model.load_weights(results_dir + 'best_3d_cae_model.hdf5')
+    model.load_weights(workdir + 'best_3d_cae_model.hdf5')
     model.save(results_dir + '3d_cae_model.hdf5')
 
     metrics = model.evaluate_generator(batch_cae(test_indices, f), len(test_indices))
@@ -284,7 +284,7 @@ if __name__ == "__main__":
     # print summary of model
     model.summary()
 
-    num_epochs = 300
+    num_epochs = 10
 
     model_checkpoint = ModelCheckpoint(workdir + 'best_3d_cnn_model.hdf5',
                                        monitor="val_acc",
@@ -299,7 +299,7 @@ if __name__ == "__main__":
         validation_steps=len(validation_indices)
     )
 
-    model.load_weights(results_dir + 'best_3d_cnn_model.hdf5')
+    model.load_weights(workdir + 'best_3d_cnn_model.hdf5')
     model.save(results_dir + '3d_cnn_model.hdf5')
 
     metrics = model.evaluate_generator(batch(test_indices, f), len(test_indices))
