@@ -1,6 +1,6 @@
-from keras.models import Sequential
+from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Activation, Conv3D, MaxPooling3D, Flatten, BatchNormalization
-from keras.layers import Conv3DTranspose, Reshape, UpSampling3D
+from keras.layers import Conv3DTranspose, Reshape, UpSampling3D, Input
 from keras.callbacks import ModelCheckpoint
 from keras.optimizers import SGD, Adam
 
@@ -12,65 +12,54 @@ import keras.backend as K
 import os
 
 import matplotlib as mpl
+
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
-from custom_loss import sensitivity, specificity
-
 workdir = os.path.expanduser('~/pac2018_root/')
 data_file = 'pac2018.hdf5'
 
-image_size = (152, 152, 152)#(121, 145, 121)
+image_size = (152, 152, 152)  # (121, 145, 121)
+input_size = (152, 152, 152, 1)
 
 
 def pac2018_3d_cae_model():
     conv_size = (3, 3, 3)
     pool_size = (2, 2, 2)
 
-    model = Sequential()
+    # 3D Convolutional Auto-Encoder
+    inputs = Input(shape=input_size)
 
-    crop_size = (152, 152, 152)
+    x = Conv3D(8, conv_size, activation='relu')(inputs)
+    x = MaxPooling3D(pool_size=pool_size)(x)
 
-    # Convolutional encoding
-    model.add(Conv3D(8, conv_size, activation='relu', input_shape=(crop_size[0], crop_size[1], crop_size[2], 1)))
-    model.add(MaxPooling3D(pool_size=pool_size))
+    x = Conv3D(8, conv_size, activation='relu')(x)
+    x = MaxPooling3D(pool_size=pool_size)(x)
 
-    model.add(Conv3D(8, conv_size, activation='relu'))
-    model.add(MaxPooling3D(pool_size=pool_size))
+    encoder = Conv3D(8, conv_size, activation='relu')(x)
 
-    model.add(Conv3D(8, conv_size, activation='relu'))
+    print("Shape of encoder", K.int_shape(encoder))
 
-    # Dense layers
-    #model.add(Flatten())
+    # 3D Convolutional Auto-Decoder
+    x = Conv3DTranspose(8, conv_size, activation='relu')(encoder)
 
-    #model.add(Dense(32*32*32, activation='relu'))
+    x = UpSampling3D(pool_size)(x)
+    x = Conv3DTranspose(8, conv_size, activation='relu')(x)
 
- #   model.add(Dense(125, activation='relu'))
- #   model.summary()
-    #model.add(Reshape((32, 32, 32, 1)))
+    x = UpSampling3D(pool_size)(x)
+    x = Conv3DTranspose(8, conv_size, activation='relu')(x)
 
-    # Deconvolutional decoding
-    model.add(Conv3DTranspose(8, conv_size, activation='relu'))
+    decoder = Conv3DTranspose(1, conv_size, activation='sigmoid')(x)
 
-    model.add(UpSampling3D(pool_size))
-    model.add(Conv3DTranspose(8, conv_size, activation='relu'))
+    print("Shape of decoder", K.int_shape(decoder))
 
-    model.add(UpSampling3D(pool_size))
-    model.add(Conv3DTranspose(8, conv_size, activation='relu'))
+    autoencoder = Model(inputs, decoder)
 
-    model.add(Conv3DTranspose(1, conv_size, activation='softmax'))
+    autoencoder.compile(loss='binary_crossentropy', optimizer='adam', metrics=["accuracy"])
 
-    model.summary()
-    # Reshape to original size
-   # model.add(Reshape(crop_size))
-
-    model.compile(loss='mean_absolute_error',
-                  optimizer='adam',
-                  metrics=["accuracy"])
-
-    return model
+    return autoencoder
 
 
 def pac2018_3d_model():
@@ -127,14 +116,14 @@ def pac2018_3d_model():
 
     model.compile(loss='categorical_crossentropy',
                   optimizer='adam',
-                  metrics=["accuracy", sensitivity, specificity])
+                  metrics=["accuracy"])
 
     return model
 
 
 def batch(indices, f):
     images = f['MRI']
-    labels = f['label']    #already in one-hot
+    labels = f['label']  # already in one-hot
 
     while True:
         np.random.shuffle(indices)
@@ -142,7 +131,8 @@ def batch(indices, f):
         for index in indices:
             try:
                 # print(images[index, ...][np.newaxis, ...].shape)
-                yield (np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...], labels[index, ...][np.newaxis, ...])
+                yield (
+                np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...], labels[index, ...][np.newaxis, ...])
             except:
                 yield (np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...])
 
@@ -165,8 +155,8 @@ def batch_cae(indices, f):
 
 def plot_metrics(hist, results_dir):
     epoch_num = range(len(hist.history['acc']))
-    train_error = np.subtract(1, np.array(hist.history['acc']))
-    test_error  = np.subtract(1, np.array(hist.history['val_acc']))
+    # train_error = np.subtract(1, np.array(hist.history['acc']))
+    # test_error = np.subtract(1, np.array(hist.history['val_acc']))
 
     plt.clf()
     plt.plot(epoch_num, np.array(hist.history['acc']), label='Training Accuracy')
@@ -218,21 +208,18 @@ if __name__ == "__main__":
         train_labels[good_subject_index, ...] = label
         good_subject_index += 1
 
-    skf = StratifiedShuffleSplit(n_splits=1, test_size = 0.2)
+    skf = StratifiedShuffleSplit(n_splits=1, test_size=0.2)
 
     for train, other in skf.split(train_indices, train_labels):
         train_indices = train
-        validation_indices = other[::2] # even
-        test_indices = other[1::2] # odd
+        validation_indices = other[::2]  # even
+        test_indices = other[1::2]  # odd
 
     print('train:', train_indices)
     print('test:', test_indices)
 
     # define model
     model = pac2018_3d_cae_model()
-
-    sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-    adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=1e-6)
 
     # print summary of model
     model.summary()
@@ -281,12 +268,12 @@ if __name__ == "__main__":
         train_labels[good_subject_index, ...] = label
         good_subject_index += 1
 
-    skf = StratifiedShuffleSplit(n_splits=1, test_size = 0.2)
+    skf = StratifiedShuffleSplit(n_splits=1, test_size=0.2)
 
     for train, other in skf.split(train_indices, train_labels):
         train_indices = train
-        validation_indices = other[::2] # even
-        test_indices = other[1::2] # odd
+        validation_indices = other[::2]  # even
+        test_indices = other[1::2]  # odd
 
     print('train:', train_indices)
     print('test:', test_indices)
@@ -294,17 +281,14 @@ if __name__ == "__main__":
     # define model
     model = pac2018_3d_model()
 
-    sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-    adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=1e-6)
-
     # print summary of model
     model.summary()
 
     num_epochs = 300
 
-    model_checkpoint = ModelCheckpoint( workdir + 'best_3d_cnn_model.hdf5',
-                                        monitor="val_acc",
-                                        save_best_only=True)
+    model_checkpoint = ModelCheckpoint(workdir + 'best_3d_cnn_model.hdf5',
+                                       monitor="val_acc",
+                                       save_best_only=True)
 
     hist = model.fit_generator(
         batch(train_indices, f),
