@@ -159,20 +159,20 @@ if __name__ == "__main__":
     print('PAC2018:', n_pac2018)
 
     with h5py.File(output_file, 'w') as f:
-        f.create_dataset('id', (n_pac2018), dtype='int32')
+        f.create_dataset('id', (n_pac2018,), dtype='int32')
         f.create_dataset('GMD', (n_pac2018, target_size[0], target_size[1], target_size[2]), dtype='float32')
 
         f.create_dataset('regional_GMD_mean', (n_pac2018, n_rois), dtype='float32')
         f.create_dataset('regional_GMD_var', (n_pac2018, n_rois), dtype='float32')
 
-        f.create_dataset('label', (n_pac2018), dtype='uint8')
+        f.create_dataset('label', (n_pac2018,), dtype='uint8')
 
-        f.create_dataset('site', (n_pac2018), dtype='uint8')
+        f.create_dataset('site', (n_pac2018,), dtype='uint8')
 
-        f.create_dataset('age', (n_pac2018), dtype='uint8')
-        f.create_dataset('gender', (n_pac2018), dtype='uint8')
+        f.create_dataset('age', (n_pac2018,), dtype='uint8')
+        f.create_dataset('gender', (n_pac2018,), dtype='uint8')
 
-        f.create_dataset('tiv', (n_pac2018), dtype='float32')
+        f.create_dataset('tiv', (n_pac2018,), dtype='float32')
 
         subjects = parse_covariates()
         subjects = parse_sites(subjects)
