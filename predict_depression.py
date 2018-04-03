@@ -21,58 +21,6 @@ data_dir = '/data1/users/adoyle/PAC2018/'
 image_size = (256, 256, 256)
 
 
-def parse_covariates():
-    file_name = 'PAC2018_Covariates_Upload.csv'
-
-    covariates_reader = csv.reader(open(data_dir + file_name))
-
-    lines = list(covariates_reader)[1:]
-
-    subjects = []
-
-    for line in lines:
-        subject = {}
-        pac_id = line[0]
-        label = int(line[1])
-
-        age = int(line[2])
-        gender = int(line[3])
-        tiv = float(line[4])
-
-        subject['id'] = pac_id
-        subject['label'] = label
-        subject['age'] = age
-        subject['gender'] = gender
-        subject['tiv'] = tiv
-
-        subjects.append(subject)
-
-    return subjects
-
-def parse_sites(subjects):
-    file_name = 'PAC2018_Sites.csv'
-    sites_reader = csv.reader(open(data_dir + file_name))
-
-    lines = list(sites_reader)[1:]
-
-    subjects_with_site = []
-    for subject in subjects:
-        for line in lines:
-            if subject['id'] in line[0]:
-                subject['site'] = int(line[1])
-                subjects_with_site.append(subject)
-
-    return subjects_with_site
-
-def hdf5_smash(subjects):
-    f = h5py.File(data_dir + 'PAC.hdf5')
-    f.create_dataset('images', (len(subjects), image_size[0], image_size[1], image_size[2], 1), dtype='float32')
-
-    for i, subject in enumerate(subjects):
-        f['images'] = nib.load(data_dir + subject['id'] + '.nii').get_data()
-
-    return f
-
 def batch_gen(f, labels, features):
     images = f['MRI']
 
@@ -87,8 +35,7 @@ def batch_gen(f, labels, features):
 if __name__ == '__main__':
     print('PAC 2018')
 
-    subjects = parse_covariates()
-    subjects = parse_sites(subjects)
+
 
     example = data_dir + subjects[0]['id'] + '.nii'
     image_size = nib.load(example).shape

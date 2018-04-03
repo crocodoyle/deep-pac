@@ -25,7 +25,7 @@ target_size = (152, 152, 152)
 def normalise_zero_one(image):
     """Image normalisation. Normalises image to fit [0, 1] range."""
 
-    image = image.astype(np.float16)
+    image = image.astype(np.float32)
     ret = (image - np.min(image))
     ret /= (np.max(image) + 0.000001)
     return ret
@@ -73,11 +73,11 @@ def resize_image_with_crop_or_pad(image, img_size=(64, 64, 64), **kwargs):
 
 def count_pac2018(input_path, label_file):
     with open(os.path.join(input_path, label_file)) as label_file:
-        qc_reader = csv.reader(label_file)
-        qc_reader.__next__()
+        pac_reader = csv.reader(label_file)
+        pac_reader.__next__()
 
         num_subjects = 0
-        for line in list(qc_reader):
+        for line in list(pac_reader):
             try:
                 label = line[1]
                 if len(label) < 1:
@@ -91,127 +91,104 @@ def count_pac2018(input_path, label_file):
     return num_subjects
 
 
-def make_pac2018(input_path, f, label_file, subject_index):
-    n = count_pac2018(input_path, label_file)
+def parse_covariates():
+    file_name = 'PAC2018_Covariates_Upload.csv'
 
-    with open(os.path.join(input_path, label_file)) as label_file:
-        qc_reader = csv.reader(label_file)
-        qc_reader.__next__()
+    covariates_reader = csv.reader(open(data_dir + file_name))
 
-        lines = list(qc_reader)
-        input_paths = [input_path] * len(lines)
+    lines = list(covariates_reader)[1:]
 
-        index = subject_index
-        for line, input_path in zip(lines, input_paths):
-            print('Processing subject %i of %i' % (index + 1, n))
+    subjects = []
 
-            returned_index = make_pac2018_subject(line, index, input_path, f)
-            if not returned_index == -1:
-                index += 1
+    for line in lines:
+        subject = {}
+        pac_id = line[0]
+        label = int(line[1])
 
-    return index
+        age = int(line[2])
+        gender = int(line[3])
+        tiv = float(line[4])
 
+        subject['id'] = pac_id
+        subject['label'] = label
+        subject['age'] = age
+        subject['gender'] = gender
+        subject['tiv'] = tiv
 
-def make_pac2018_subject(line, subject_index, input_path, f):
-    try:
-        t1_filename = line[0][:] + '.nii'
+        subjects.append(subject)
 
-        label = int(line[1])  # 0, 1, or 2
+    return subjects
 
-        one_hot = [0, 0]
+def parse_sites(subjects):
+    file_name = 'PAC2018_Sites.csv'
+    sites_reader = csv.reader(open(data_dir + file_name))
 
-        if label >= 1:
-            one_hot = [0, 1]
-        else:
-            one_hot = [1, 0]
+    lines = list(sites_reader)[1:]
 
-        f['label'][subject_index, :] = one_hot
+    subjects_with_site = []
+    for subject in subjects:
+        for line in lines:
+            if subject['id'] in line[0]:
+                subject['site'] = int(line[1])
+                subjects_with_site.append(subject)
 
-        t1_data = nib.load(input_path + t1_filename).get_data()
+    return subjects_with_site
 
-        if not t1_data.shape == target_size:
-            t1_data = resize_image_with_crop_or_pad(t1_data, img_size=target_size, mode='constant')
+def parse_regional_GMD(subjects):
+    file_name = 'PAC2018Covariates_and_regional_GMD.csv'
+    region_reader = csv.reader(open(data_dir + file_name))
 
-        #t1_data = equalize_hist(t1_data, mask=mask)
+    lines = list(region_reader)[1:]
 
-        f['MRI'][subject_index, ...] = normalise_zero_one(t1_data)
-        f['dataset'][subject_index] = 'PAC2018'
-        f['filename'][subject_index] = t1_filename
+    subjects_with_regional_GMD = []
 
-        # plt.imshow(t1_data[96, ...])
-        # plt.axis('off')
-        # plt.savefig(output_dir + t1_filename[:] + '.png', bbox_inches='tight', cmap='gray')
+    for subject in subjects:
+        for line in lines:
+            if subject['id'] in line[0]:
+                subject['regional_GMD_mean'] = np.asarray(line[5:], dtype='float32')
+                subjects_with_regional_GMD.append(subject)
 
-        return subject_index
-    except Exception as e:
-        print('Error:', e)
-        return -1
-
-
-def check_datasets():
-    mri_sites = ['PAC2018']
-
-    histograms = {}
-
-    for site in mri_sites:
-        histograms[site] = np.zeros(256, dtype='float32')
-
-    bins = np.linspace(0.0, 1.0, 257)
-
-    images = f['MRI']
-    datasets = f['dataset']
-    filenames = f['filename']
-
-    for i, (img, dataset, filename) in enumerate(zip(images, datasets, filenames)):
-        dataset = dataset.decode('UTF-8')
-        filename = filename.decode('UTF-8')
-        img = np.asarray(img, dtype='float32')
-
-        try:
-            histo = np.histogram(img, bins=bins)
-            histograms[dataset] += histo[0]
-            print(filename, dataset, np.mean(histo[0]), np.var(histo[0]))
-        except:
-            print('Error for', filename, 'in dataset', dataset)
-
-    fig, axes = plt.subplots(len(mri_sites), 1, sharex=True, figsize=(4, 24))
-
-    for i, site in enumerate(mri_sites):
-        try:
-            histograms[site] = np.divide(histograms[site], np.sum(histograms[site]))
-            axes[i].plot(bins[:-1], histograms[site], lw=2, label=site)
-
-            # axes[i].set_xlim([0, 1])
-
-            axes[i].set_ylabel(site, fontsize=16)
-            axes[i].set_xscale('log')
-            axes[i].set_yscale('log')
-        except:
-            print('Problem normalizing histogram for', site)
-
-    plt.tight_layout()
-    plt.savefig(output_dir + 'dataset_histograms.png', bbox_inches='tight')
+    return subjects_with_regional_GMD
 
 if __name__ == "__main__":
+
     n_pac2018 = count_pac2018(data_dir, 'PAC2018Covariates_and_regional_GMD.csv')
+    n_rois = 246
 
     print('Subjects with labels:')
     print('PAC2018:', n_pac2018)
 
-    total_subjects = n_pac2018
-
     with h5py.File(output_file, 'w') as f:
-        f.create_dataset('MRI', (total_subjects, target_size[0], target_size[1], target_size[2]), dtype='float32')
-        f.create_dataset('label', (total_subjects, 2), dtype='uint8')
-        dt = h5py.special_dtype(vlen=bytes)
-        f.create_dataset('filename', (total_subjects,), dtype=dt)
-        f.create_dataset('dataset', (total_subjects,), dtype=dt)
+        f.create_dataset('id', (n_pac2018), dtype='int32')
+        f.create_dataset('GMD', (n_pac2018, target_size[0], target_size[1], target_size[2]), dtype='float32')
 
-        print('Starting PAC2018...')
-        next_index = make_pac2018(data_dir, f, 'PAC2018Covariates_and_regional_GMD.csv', 0)
-        pac2018_indices = range(0, next_index)
-        print('Last PAC2018 index:', next_index - 1)
+        f.create_dataset('regional_GMD_mean', (n_pac2018, n_rois), dtype='float32')
+        f.create_dataset('regional_GMD_var', (n_pac2018, n_rois), dtype='float32')
 
-        pickle.dump(pac2018_indices, open(output_dir + 'pac2018_indices.pkl', 'wb'))
+        f.create_dataset('label', (n_pac2018), dtype='uint8')
 
-        check_datasets()
+        f.create_dataset('site', (n_pac2018), dtype='uint8')
+
+        f.create_dataset('age', (n_pac2018), dtype='uint8')
+        f.create_dataset('gender', (n_pac2018), dtype='uint8')
+
+        f.create_dataset('tiv', (n_pac2018), dtype='float32')
+
+        subjects = parse_covariates()
+        subjects = parse_sites(subjects)
+        subjects = parse_regional_GMD(subjects)
+
+        for i, subject in enumerate(subjects):
+            gmd_filepath = data_dir + subject['id'] + '.nii'
+            gmd_img = nib.load(gmd_filepath).get_data()
+
+            gmd_img = resize_image_with_crop_or_pad(gmd_img, target_size, mode='constant')
+
+            f['id'][i] = int(subject['id'][8:])
+            f['GMD'][i, ...] = gmd_img
+            f['regional_GMD_mean'][i, ...] = subject['regional_GMD_mean']
+            f['label'][i] = subject['label']
+            f['site'] = subject['site']
+            f['age'] = subject['age']
+            f['gender'] = subject['gender']
+            f['tiv'] = subject['tiv']

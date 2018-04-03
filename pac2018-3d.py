@@ -122,35 +122,38 @@ def pac2018_3d_model():
 
 
 def batch(indices, f):
-    images = f['MRI']
-    labels = f['label']  # already in one-hot
+    images = f['GMD']
+    labels = f['label']
 
     while True:
         np.random.shuffle(indices)
 
         for index in indices:
             try:
-                # print(images[index, ...][np.newaxis, ...].shape)
-                yield (
-                np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...], labels[index, ...][np.newaxis, ...])
+                label = labels[index]
+                if label == 1:
+                    one_hot_label = [1, 0]
+                elif label == 2:
+                    one_hot_label = [0, 1]
+
+                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...], one_hot_label[np.newaxis, ...])
             except:
-                yield (np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...])
+                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...])
 
 
 def batch_cae(indices, f):
-    images = f['MRI']
-    labels = f['MRI']
+    images = f['GMD']
+    labels = f['GMD']
 
     while True:
         np.random.shuffle(indices)
 
         for index in indices:
             try:
-                # print(images[index, ...][np.newaxis, ...].shape)
-                yield (np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...],
-                       np.reshape(labels[index, ...], image_size + (1,))[np.newaxis, ...])
+                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...],
+                       np.reshape(labels[index, ...], input_size)[np.newaxis, ...])
             except:
-                yield (np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...])
+                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...])
 
 
 def plot_metrics(hist, results_dir):
@@ -189,24 +192,17 @@ def setup_experiment(workdir):
 if __name__ == "__main__":
     results_dir, experiment_number = setup_experiment(workdir)
 
-    pac2018_indices = pickle.load(open(workdir + 'pac2018_indices.pkl', 'rb'))
-
     f = h5py.File(workdir + data_file, 'r')
-    images = f['MRI']
+    images = f['GMD']
+    labels = f['labels']
+
+    pac2018_indices = list(range(len(images)))
 
     # 3D CAE
     print('number of samples in dataset:', images.shape[0])
 
     train_indices = pac2018_indices
-
-    train_labels = np.zeros((len(train_indices), 2))
-    print('labels shape:', train_labels.shape)
-
-    good_subject_index = 0
-    for index in train_indices:
-        label = f['label'][index, ...]
-        train_labels[good_subject_index, ...] = label
-        good_subject_index += 1
+    train_labels = labels
 
     skf = StratifiedShuffleSplit(n_splits=1, test_size=0.2)
 
@@ -216,6 +212,7 @@ if __name__ == "__main__":
         test_indices = other[1::2]  # odd
 
     print('train:', train_indices)
+    print('val:', validation_indices)
     print('test:', test_indices)
 
     # define model
@@ -243,66 +240,6 @@ if __name__ == "__main__":
     model.save(results_dir + '3d_cae_model.hdf5')
 
     metrics = model.evaluate_generator(batch_cae(test_indices, f), len(test_indices))
-
-    print(model.metrics_names)
-    print(metrics)
-
-    pickle.dump(metrics, open(results_dir + 'test_metrics', 'wb'))
-
-    plot_metrics(hist, results_dir)
-
-    print('This experiment brought to you by the number:', experiment_number)
-
-    # CNN
-
-    print('number of samples in dataset:', images.shape[0])
-
-    train_indices = pac2018_indices
-
-    train_labels = np.zeros((len(train_indices), 2))
-    print('labels shape:', train_labels.shape)
-
-    good_subject_index = 0
-    for index in train_indices:
-        label = f['label'][index, ...]
-        train_labels[good_subject_index, ...] = label
-        good_subject_index += 1
-
-    skf = StratifiedShuffleSplit(n_splits=1, test_size=0.2)
-
-    for train, other in skf.split(train_indices, train_labels):
-        train_indices = train
-        validation_indices = other[::2]  # even
-        test_indices = other[1::2]  # odd
-
-    print('train:', train_indices)
-    print('test:', test_indices)
-
-    # define model
-    model = pac2018_3d_model()
-
-    # print summary of model
-    model.summary()
-
-    num_epochs = 10
-
-    model_checkpoint = ModelCheckpoint(workdir + 'best_3d_cnn_model.hdf5',
-                                       monitor="val_acc",
-                                       save_best_only=True)
-
-    hist = model.fit_generator(
-        batch(train_indices, f),
-        len(train_indices),
-        epochs=num_epochs,
-        callbacks=[model_checkpoint],
-        validation_data=batch(validation_indices, f),
-        validation_steps=len(validation_indices)
-    )
-
-    model.load_weights(workdir + 'best_3d_cnn_model.hdf5')
-    model.save(results_dir + '3d_cnn_model.hdf5')
-
-    metrics = model.evaluate_generator(batch(test_indices, f), len(test_indices))
 
     print(model.metrics_names)
     print(metrics)
