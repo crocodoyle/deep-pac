@@ -188,7 +188,7 @@ if __name__ == "__main__":
             f['GMD'][i, ...] = gmd_img
             f['regional_GMD_mean'][i, ...] = subject['regional_GMD_mean']
             f['label'][i] = subject['label']
-            f['site'] = subject['site']
-            f['age'] = subject['age']
-            f['gender'] = subject['gender']
-            f['tiv'] = subject['tiv']
+            f['site'][i] = subject['site']
+            f['age'][i] = subject['age']
+            f['gender'][i] = subject['gender']
+            f['tiv'][i] = subject['tiv']
