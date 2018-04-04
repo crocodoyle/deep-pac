@@ -39,7 +39,7 @@ for i = 0:size(BNAsubregions, 1) - 1
 end;
 
 % Import subject data
-[~, ~, raw] = xlsread('C:\Users\joshu\Desktop\PAC2018\PAC2018_Covariates_Upload.xlsx','Sheet1','A2:E1793');
+[~, ~, raw] = xlsread('PAC2018_Covariates_Upload.xlsx','Sheet1','A2:E1793');
 raw(cellfun(@(x) ~isempty(x) && isnumeric(x) && isnan(x),raw)) = {''};
 cellVectors = raw(:,1);
 raw = raw(:,[2,3,4,5]);

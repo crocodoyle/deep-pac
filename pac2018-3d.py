@@ -212,9 +212,9 @@ def visualize_cae(results_dir, model, indices, f):
             min_id = index
             min_img = pred
 
-    worst_img = nib.Nifti1Image(min_img)
+    worst_img = nib.Nifti1Image(min_img, affine=None)
     nib.nifti1.save(worst_img, results_dir + 'worst_img.nii')
-    best_img = nib.Nifti1Image(max_img)
+    best_img = nib.Nifti1Image(max_img, affine=None)
     nib.nifti1.save(best_img, results_dir + 'best_img.nii')
 
 
