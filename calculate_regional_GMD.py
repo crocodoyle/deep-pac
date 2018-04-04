@@ -4,6 +4,8 @@ import numpy as np
 from nilearn.image import resample_to_img
 from joblib import Parallel, delayed
 
+from make_dataset import count_pac2018
+
 img_dir = os.path.expanduser('~/pac2018_root/')
 
 atlas_name = 'brainnetome'
@@ -54,7 +56,39 @@ def process_file(file):
 
 if __name__ == '__main__':
     if generate_GMD_files:
-        Parallel(n_jobs=4)(delayed(process_file)(f) for f in os.listdir(img_dir))
+        #Parallel(n_jobs=4)(delayed(process_file)(f) for f in os.listdir(img_dir))
+
+        n = count_pac2018(img_dir, 'PAC2018Covariates_and_regional_GMD.csv')
+
+        atlas_img = nib.load(atlas_filename)
+        atlas_img_data = atlas_img.get_data()
+        regions = np.unique(atlas_img_data[~np.isnan(atlas_img_data)])
+
+        mean_pattern = "_GM-mean-"
+        var_pattern = "_GM-var-"
+        gmd_means = np.dtype({'names': ('subject', 'region', 'mean'), 'formats': (int, int, np.float32)})
+        gmd_vars = np.dtype({'names': ('subject', 'region', 'var'), 'formats': (int, int, np.float32)})
+        extension_filter = ['txt']
+        for file in os.listdir(img_dir):
+            if os.path.isfile(os.path.join(img_dir, file)) and file[-3:] in extension_filter:
+                filename = file[:12]
+                number = int(file[8:12])
+                if mean_pattern in file:
+                    print("%s has mean data" % filename)
+                    gm_mean = np.loadtxt(os.path.join(img_dir, file))
+                    gm_mean = np.append(np.repeat(number, len(gm_mean)), gm_mean)
+                    gmd_means = np.append(gmd_means, gm_mean)
+                if var_pattern in file:
+                    print("%s has variance data" % filename)
+                    gm_var = np.loadtxt(os.path.join(img_dir, file))
+                    nums = np.repeat(number, len(gm_var))
+                    print(nums.shape)
+                    gm_var = np.append(nums, gm_var)
+
+                    gmd_vars = np.append(gmd_vars, gm_var)
+
+    print(gmd_means.shape)
+    print(gmd_vars.shape)
 
     # Let's check the size of the PAC2018 niftis
     filename = os.path.join(img_dir, 'PAC2018_0001.nii')
