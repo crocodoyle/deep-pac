@@ -145,7 +145,8 @@ def parse_regional_GMD(subjects):
     for subject in subjects:
         for line in lines:
             if subject['id'] in line[0]:
-                subject['regional_GMD_mean'] = np.asarray(line[5:], dtype='float32')
+                subject['regional_GMD_mean'] = np.asarray(line[5:251], dtype='float32')
+                subject['regional_GMD_var'] = np.asarray(line[252:], dtype='float32')
                 subjects_with_regional_GMD.append(subject)
 
     return subjects_with_regional_GMD

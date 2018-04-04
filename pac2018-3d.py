@@ -5,6 +5,7 @@ from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.models import load_model
 from keras.optimizers import SGD, Adam
 
+import nibabel as nib
 import numpy as np
 import h5py
 import pickle
@@ -28,24 +29,26 @@ input_size = (152, 152, 152, 1) # Input size to 3D CAE
 conv_size = (3, 3, 3)
 pool_size = (2, 2, 2)
 
+cae_loss_function = 'binary_crossentropy'
+cae_optimizer = 'adam'
+cae_metrics = ['accuracy']
 
-def cae_encoder():
+
+def cae_encoder(trainable=True):
     # 3D Convolutional Auto-Encoder
     inputs = Input(shape=input_size)
 
-    x = Conv3D(8, conv_size, activation='relu')(inputs)
-    x = MaxPooling3D(pool_size=pool_size)(x)
+    x = Conv3D(8, conv_size, activation='relu', trainable=trainable)(inputs)
+    x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
-    x = Conv3D(8, conv_size, activation='relu')(x)
-    x = MaxPooling3D(pool_size=pool_size)(x)
+    x = Conv3D(8, conv_size, activation='relu', trainable=trainable)(x)
+    x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
-    x = Conv3D(8, conv_size, activation='relu')(x)
+    x = Conv3D(8, conv_size, activation='relu', trainable=trainable)(x)
 
-    encoder = Flatten(name='encoded')(x)
+    encoder = Flatten(name='encoded', trainable=trainable)(x)
 
     model = Model(inputs=inputs, outputs=encoder)
-
-    model.summary()
 
     return model
 
@@ -78,7 +81,7 @@ def cae_model():
 
     autoencoder = Model(encoder.input, decoder(encoder.output))
 
-    autoencoder.compile(loss='binary_crossentropy', optimizer='adam', metrics=["accuracy"])
+    autoencoder.compile(loss=cae_loss_function, optimizer=cae_optimizer, metrics=cae_metrics)
 
     return autoencoder
 
@@ -141,18 +144,23 @@ def cnn_model():
 
 def batch(indices, f):
     images = f['GMD']
-    labels = f['label']  # already in one-hot
+    labels = f['label']
 
     while True:
         np.random.shuffle(indices)
 
         for index in indices:
             try:
-                # print(images[index, ...][np.newaxis, ...].shape)
-                yield (
-                np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...], labels[index, ...][np.newaxis, ...])
+                label = labels[index]
+
+                if label == 1:
+                    one_hot_label = [1, 0]
+                elif label == 2:
+                    one_hot_label = [0, 1]
+
+                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...], one_hot_label[np.newaxis, ...])
             except:
-                yield (np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...])
+                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...])
 
 
 def batch_cae(indices, f):
@@ -164,11 +172,50 @@ def batch_cae(indices, f):
 
         for index in indices:
             try:
-                # print(images[index, ...][np.newaxis, ...].shape)
-                yield (np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...],
-                       np.reshape(labels[index, ...], image_size + (1,))[np.newaxis, ...])
+                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...],
+                       np.reshape(labels[index, ...], input_size)[np.newaxis, ...])
             except:
-                yield (np.reshape(images[index, ...], image_size + (1,))[np.newaxis, ...])
+                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...])
+
+
+def visualize_cae(results_dir, model, indices, f):
+    images = f['GMD']
+
+    acc_index = 0
+    k = 0
+    for mn in model.metrics_names:
+        if mn == 'acc':
+            acc_index = k
+        k += 1
+
+    min_acc = 1.01
+    min_id = -1
+    max_acc = 0.00
+    max_id = -1
+    min_img = []
+    max_img = []
+
+    # Find best and worst images
+    for index in indices:
+        img = np.reshape(images[index, ...], input_size)[np.newaxis, ...]
+        eval = model.evaluate(img, img)
+        pred = model.predict(img)
+
+        acc = eval[acc_index]
+
+        if acc > max_acc:
+            max_acc = acc
+            max_id = index
+            max_img = pred
+        if acc < min_acc:
+            min_acc = acc
+            min_id = index
+            min_img = pred
+
+    worst_img = nib.Nifti1Image(min_img)
+    nib.nifti1.save(worst_img, results_dir + 'worst_img.nii')
+    best_img = nib.Nifti1Image(max_img)
+    nib.nifti1.save(best_img, results_dir + 'best_img.nii')
 
 
 def plot_metrics(hist, results_dir, fn):
@@ -205,32 +252,31 @@ def setup_experiment(workdir):
 
 
 def load_cae_test(path):
-    model = load_model(path)
+    # Load Encoder with model weights
+    encoder = cae_encoder(False)
+    encoder.load_weights(path, by_name=True)
+    encoder.compile(loss=cae_loss_function, optimizer=cae_optimizer, metrics=cae_metrics)
+    encoder.summary()
 
 
 if __name__ == "__main__":
     results_dir, experiment_number = setup_experiment(workdir)
 
-    load_cae_test(workdir + 'experiment-2/3d_cae_model.hdf5')
+    # load_cae_test(workdir + 'experiment-2/3d_cae_model.hdf5')
 
-    pac2018_indices = pickle.load(open(workdir + 'pac2018_indices.pkl', 'rb'))
+    # quit()
 
     f = h5py.File(workdir + data_file, 'r')
     images = f['GMD']
+    labels = f['label']
+
+    pac2018_indices = list(range(len(images)))
 
     # 3D CAE
     print('number of samples in dataset:', images.shape[0])
 
     train_indices = pac2018_indices
-
-    train_labels = np.zeros((len(train_indices), 2))
-    print('labels shape:', train_labels.shape)
-
-    good_subject_index = 0
-    for index in train_indices:
-        label = f['label'][index, ...]
-        train_labels[good_subject_index, ...] = label
-        good_subject_index += 1
+    train_labels = labels
 
     skf = StratifiedShuffleSplit(n_splits=1, test_size=0.2)
 
@@ -240,6 +286,7 @@ if __name__ == "__main__":
         test_indices = other[1::2]       # odd
 
     print('train:', train_indices)
+    print('val:', validation_indices)
     print('test:', test_indices)
 
     # define model
@@ -248,7 +295,7 @@ if __name__ == "__main__":
     # print summary of model
     model.summary()
 
-    num_epochs = 10
+    num_epochs = 1
 
     model_checkpoint = ModelCheckpoint(workdir + 'best_3d_cae_model.hdf5',
                                        monitor="val_acc",
@@ -276,64 +323,6 @@ if __name__ == "__main__":
 
     plot_metrics(hist, results_dir, 'results_3d_cae.png')
 
-    print('This experiment brought to you by the number:', experiment_number)
-
-    # CNN
-
-    print('number of samples in dataset:', images.shape[0])
-
-    train_indices = pac2018_indices
-
-    train_labels = np.zeros((len(train_indices), 2))
-    print('labels shape:', train_labels.shape)
-
-    good_subject_index = 0
-    for index in train_indices:
-        label = f['label'][index, ...]
-        train_labels[good_subject_index, ...] = label
-        good_subject_index += 1
-
-    skf = StratifiedShuffleSplit(n_splits=1, test_size=0.2)
-
-    for train, other in skf.split(train_indices, train_labels):
-        train_indices = train
-        validation_indices = other[::2]  # even
-        test_indices = other[1::2]       # odd
-
-    print('train:', train_indices)
-    print('test:', test_indices)
-
-    # define model
-    model = cnn_model()
-
-    # print summary of model
-    model.summary()
-
-    num_epochs = 10
-
-    model_checkpoint = ModelCheckpoint(workdir + 'best_3d_cnn_model.hdf5',
-                                       monitor="val_acc",
-                                       save_best_only=True)
-
-    hist = model.fit_generator(
-        batch(train_indices, f),
-        len(train_indices),
-        epochs=num_epochs,
-        callbacks=[model_checkpoint],
-        validation_data=batch(validation_indices, f),
-        validation_steps=len(validation_indices)
-    )
-
-    model.load_weights(workdir + 'best_3d_cnn_model.hdf5')
-    model.save(results_dir + '3d_cnn_model.hdf5')
-
-    metrics = model.evaluate_generator(batch(test_indices, f), len(test_indices))
-
-    print(model.metrics_names)
-    print(metrics)
-
-    pickle.dump(metrics, open(results_dir + 'test_metrics_3d_cnn', 'wb'))
-
-    plot_metrics(hist, results_dir, 'results_3d_cnn.png')
+    visualize_cae(results_dir, model, test_indices, f)
 
     print('This experiment brought to you by the number:', experiment_number)
