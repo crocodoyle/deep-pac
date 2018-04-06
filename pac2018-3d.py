@@ -93,8 +93,8 @@ def top_level_classifier():
     inputs = Input(shape=(34*34*34*8, 1))
     x = Flatten()(inputs)
 
-    x = Dense(20, activation=activation_function)(x)
-    x = Dense(10, activation=activation_function)(x)
+    x = Dense(1000, activation=activation_function)(x)
+    x = Dense(100, activation=activation_function)(x)
     x = Dense(1, activation='softmax')(x)
 
     model = Model(inputs=inputs, output=x)
@@ -337,6 +337,7 @@ if __name__ == "__main__":
 
     plot_metrics(hist, results_dir, results_plot_filename)
 
-    visualize_cae(results_dir, model, test_indices, f)
+    if not train_stacked_model:
+        visualize_cae(results_dir, model, test_indices, f)
 
     print('This experiment brought to you by the number:', experiment_number)
