@@ -83,7 +83,7 @@ def cae_decoder():
     x = UpSampling3D(pool_size)(x)
     x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
 
-    decoder = Conv3DTranspose(1, conv_size, activation='sigmoid', name='decoded')(x)
+    decoder = Conv3DTranspose(1, conv_size, activation='linear', name='decoded')(x)
 
     model = Model(inputs=inputs, output=decoder)
 
