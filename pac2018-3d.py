@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 
 workdir = os.path.expanduser('~/pac2018_root/')
+cae_model_file = workdir + 'experiment-1/3d_cae_model.hdf5'
 data_file = 'pac2018.hdf5'
 
 image_size = (152, 152, 152)    # (121, 145, 121) is original size, resized in make_dataset.py
@@ -32,19 +33,22 @@ pool_size = (2, 2, 2)
 cae_loss_function = 'binary_crossentropy'
 cae_optimizer = 'adam'
 cae_metrics = ['accuracy']
+activation_function = 'relu'
+
+train_stacked_model = True
 
 
 def cae_encoder(trainable=True):
     # 3D Convolutional Auto-Encoder
     inputs = Input(shape=input_size)
 
-    x = Conv3D(8, conv_size, activation='relu', trainable=trainable)(inputs)
+    x = Conv3D(8, conv_size, activation=activation_function, trainable=trainable)(inputs)
     x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
-    x = Conv3D(8, conv_size, activation='relu', trainable=trainable)(x)
+    x = Conv3D(8, conv_size, activation=activation_function, trainable=trainable)(x)
     x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
-    x = Conv3D(8, conv_size, activation='relu', trainable=trainable)(x)
+    x = Conv3D(8, conv_size, activation=activation_function, trainable=trainable)(x)
 
     encoder = Flatten(name='encoded', trainable=trainable)(x)
 
@@ -59,13 +63,13 @@ def cae_decoder():
 
     x = Reshape((34, 34, 34, 8))(inputs)
 
-    x = Conv3DTranspose(8, conv_size, activation='relu')(x)
+    x = Conv3DTranspose(8, conv_size, activation=activation_function)(x)
 
     x = UpSampling3D(pool_size)(x)
-    x = Conv3DTranspose(8, conv_size, activation='relu')(x)
+    x = Conv3DTranspose(8, conv_size, activation=activation_function)(x)
 
     x = UpSampling3D(pool_size)(x)
-    x = Conv3DTranspose(8, conv_size, activation='relu')(x)
+    x = Conv3DTranspose(8, conv_size, activation=activation_function)(x)
 
     decoder = Conv3DTranspose(1, conv_size, activation='sigmoid', name='decoded')(x)
 
@@ -75,7 +79,6 @@ def cae_decoder():
 
 
 def cae_model():
-
     encoder = cae_encoder()
     decoder = cae_decoder()
 
@@ -86,56 +89,34 @@ def cae_model():
     return autoencoder
 
 
-def cnn_model():
-    nb_classes = 2
+def top_level_classifier():
+    inputs = Input(shape=(34*34*34*8, 1))
+    x = Flatten()(inputs)
 
-    model = Sequential()
+    x = Dense(20, activation=activation_function)(x)
+    x = Dense(10, activation=activation_function)(x)
+    x = Dense(1, activation='softmax')(x)
 
-    model.add(Conv3D(4, conv_size, activation='relu', input_shape=(image_size[0], image_size[1], image_size[2], 1)))
-    model.add(Dropout(0.2))
-    model.add(BatchNormalization())
-    model.add(Conv3D(8, conv_size, activation='relu'))
-    model.add(Dropout(0.2))
-    model.add(BatchNormalization())
-    model.add(MaxPooling3D(pool_size=pool_size))
+    model = Model(inputs=inputs, output=x)
 
-    model.add(Conv3D(16, conv_size, activation='relu'))
-    model.add(Dropout(0.2))
-    model.add(Conv3D(16, conv_size, activation='relu'))
-    model.add(Dropout(0.2))
-    model.add(BatchNormalization())
-    model.add(MaxPooling3D(pool_size=pool_size))
+    return model
 
-    model.add(Conv3D(32, conv_size, activation='relu'))
-    model.add(Dropout(0.3))
-    model.add(Conv3D(32, conv_size, activation='relu'))
-    model.add(Dropout(0.3))
-    model.add(BatchNormalization())
-    model.add(MaxPooling3D(pool_size=pool_size))
 
-    model.add(Conv3D(32, conv_size, activation='relu'))
-    model.add(Dropout(0.4))
-    model.add(MaxPooling3D(pool_size=pool_size))
+def load_cae(path):
+    # Load Encoder with model weights
+    encoder = cae_encoder(False)
+    encoder.load_weights(path, by_name=True)
+    encoder.compile(loss=cae_loss_function, optimizer=cae_optimizer, metrics=cae_metrics)
+    return encoder
 
-    model.add(Conv3D(64, conv_size, activation='relu'))
-    model.add(Dropout(0.4))
-    # model.add(MaxPooling3D(pool_size=pool_size))
 
-    model.add(Conv3D(8, (1, 1, 1), activation='relu'))
+def cae_classifier_model():
+    encoder = load_cae(cae_model_file)
+    top_level = top_level_classifier()
 
-    model.add(Flatten())
-    model.add(Dense(32, activation='relu'))
-    model.add(Dropout(0.5))
+    model = Model(encoder.input, top_level(encoder.output))
 
-    # model.add(Conv3D(256, (1, 1, 1), activation=('relu')))
-    # model.add(Dropout(0.5))
-    # model.add(Conv3D(nb_classes, (1, 1, 1), activation=('relu')))
-    # model.add(Dropout(0.5))
-    # model.add(Flatten())
-    model.add(Dense(nb_classes))
-    model.add(Activation('softmax'))
-
-    model.compile(loss='categorical_crossentropy',
+    model.compile(loss='binary_crossentropy',
                   optimizer='adam',
                   metrics=["accuracy"])
 
@@ -153,12 +134,14 @@ def batch(indices, f):
             try:
                 label = labels[index]
 
-                if label == 1:
-                    one_hot_label = [1, 0]
-                elif label == 2:
-                    one_hot_label = [0, 1]
+                #if label == 2:
+                #    label = 0
 
-                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...], one_hot_label[np.newaxis, ...])
+                # one_hot_label = [0, 1]
+                # if label == 1:
+                #    one_hot_label = [1, 0]
+
+                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...], label[np.newaxis, ...])
             except:
                 yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...])
 
@@ -280,20 +263,8 @@ def setup_experiment(workdir):
     return results_dir, experiment_number
 
 
-def load_cae_test(path):
-    # Load Encoder with model weights
-    encoder = cae_encoder(False)
-    encoder.load_weights(path, by_name=True)
-    encoder.compile(loss=cae_loss_function, optimizer=cae_optimizer, metrics=cae_metrics)
-    encoder.summary()
-
-
 if __name__ == "__main__":
     results_dir, experiment_number = setup_experiment(workdir)
-
-    # load_cae_test(workdir + 'experiment-2/3d_cae_model.hdf5')
-
-    # quit()
 
     f = h5py.File(workdir + data_file, 'r')
     images = f['GMD']
@@ -318,39 +289,53 @@ if __name__ == "__main__":
     print('val:', validation_indices)
     print('test:', test_indices)
 
-    # define model
-    model = cae_model()
+    if train_stacked_model:
+        print("Training stacked classifier model")
+        model = cae_classifier_model()
+        best_model_filename = workdir + 'best_stacked_model.hdf5'
+        model_filename = results_dir + 'stacked_model.hdf5'
+        metrics_filename = results_dir + 'test_metrics_stacked'
+        results_plot_filename = 'results_stacked.png'
+        batch_func = batch
+    else:
+        print("Training 3D convolutional autoencoder")
+        model = cae_model()
+        best_model_filename = workdir + 'best_3d_cae_model.hdf5'
+        model_filename = results_dir + '3d_cae_model.hdf5'
+        metrics_filename = results_dir + 'test_metrics_3d_cae'
+        results_plot_filename = 'results_3d_cae.png'
+        batch_func = batch_cae
 
     # print summary of model
     model.summary()
 
-    num_epochs = 1
+    num_epochs = 100
 
-    model_checkpoint = ModelCheckpoint(workdir + 'best_3d_cae_model.hdf5',
+    early_stopping = EarlyStopping(monitor='val_acc', patience=2)
+    model_checkpoint = ModelCheckpoint(best_model_filename,
                                        monitor="val_acc",
                                        save_best_only=True)
-    early_stopping = EarlyStopping(monitor='val_acc', patience=2)
 
     hist = model.fit_generator(
-        batch_cae(train_indices, f),
+        batch_func(train_indices, f),
         len(train_indices),
         epochs=num_epochs,
         callbacks=[model_checkpoint, early_stopping],
-        validation_data=batch_cae(validation_indices, f),
+        validation_data=batch_func(validation_indices, f),
         validation_steps=len(validation_indices)
     )
 
-    model.load_weights(workdir + 'best_3d_cae_model.hdf5')
-    model.save(results_dir + '3d_cae_model.hdf5')
+    model.load_weights(best_model_filename)
+    model.save(model_filename)
 
-    metrics = model.evaluate_generator(batch_cae(test_indices, f), len(test_indices))
+    metrics = model.evaluate_generator(batch_func(test_indices, f), len(test_indices))
 
     print(model.metrics_names)
     print(metrics)
 
-    pickle.dump(metrics, open(results_dir + 'test_metrics_3d_cae', 'wb'))
+    pickle.dump(metrics, open(metrics_filename, 'wb'))
 
-    plot_metrics(hist, results_dir, 'results_3d_cae.png')
+    plot_metrics(hist, results_dir, results_plot_filename)
 
     visualize_cae(results_dir, model, test_indices, f)
 
