@@ -93,8 +93,8 @@ def top_level_classifier():
     inputs = Input(shape=(34*34*34*8, 1))
     x = Flatten()(inputs)
 
-    x = Dense(1000, activation=activation_function)(x)
-    x = Dense(100, activation=activation_function)(x)
+    x = Dense(900, activation=activation_function)(x)
+    x = Dense(500, activation=activation_function)(x)
     x = Dense(1, activation='softmax')(x)
 
     model = Model(inputs=inputs, output=x)
