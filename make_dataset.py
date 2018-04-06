@@ -167,6 +167,8 @@ if __name__ == "__main__":
         f.create_dataset('regional_GMD_var', (n_pac2018, n_rois), dtype='float32')
 
         f.create_dataset('label', (n_pac2018,), dtype='uint8')
+        f.create_dataset('orig_label', (n_pac2018,), dtype='uint8')
+        f.create_dataset('one_hot_label', (n_pac2018, 2), dtype='uint8')
 
         f.create_dataset('site', (n_pac2018,), dtype='uint8')
 
@@ -188,7 +190,13 @@ if __name__ == "__main__":
             f['id'][i] = int(subject['id'][8:])
             f['GMD'][i, ...] = gmd_img
             f['regional_GMD_mean'][i, ...] = subject['regional_GMD_mean']
-            f['label'][i] = subject['label']
+            if subject['label'] == 2:
+                f['label'][i] = 0
+                f['one_hot_label'][i] = [0, 1]
+            else:
+                f['label'][i] = 1
+                f['one_hot_label'][i] = [1, 0]
+            f['orig_label'][i] = subject['label']
             f['site'][i] = subject['site']
             f['age'][i] = subject['age']
             f['gender'][i] = subject['gender']

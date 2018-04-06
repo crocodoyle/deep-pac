@@ -4,25 +4,30 @@ from keras.layers import Conv3DTranspose, Reshape, UpSampling3D, Input, Lambda
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.models import load_model
 from keras.optimizers import SGD, Adam
-
+from keras.utils import to_categorical
+from numpy.random import seed
+from tensorflow import set_random_seed
+from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 import nibabel as nib
 import numpy as np
 import h5py
 import pickle
-
+import matplotlib as mpl
 import keras.backend as K
 import os
-
-import matplotlib as mpl
 
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 
-from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
+# Set seed for experiment replicability
+random_seed = 38493
+seed(random_seed)
+set_random_seed(random_seed)
 
 workdir = os.path.expanduser('~/pac2018_root/')
-cae_model_file = workdir + 'experiment-1/3d_cae_model.hdf5'
+cae_model_file = workdir + 'experiment-62/3d_cae_model.hdf5'  # 'experiment-1/3d_cae_model.hdf5' 62 is deep, 1 is shallow
 data_file = 'pac2018.hdf5'
+average_image_file = workdir + 'average_nifti.nii'
 
 image_size = (152, 152, 152)    # (121, 145, 121) is original size, resized in make_dataset.py
 input_size = (152, 152, 152, 1) # Input size to 3D CAE
@@ -35,7 +40,7 @@ cae_optimizer = 'adam'
 cae_metrics = ['accuracy']
 activation_function = 'relu'
 
-train_stacked_model = False
+train_stacked_model = True
 
 cae_filter_count = 8
 cae_output_shape = (15, 15, 15, cae_filter_count)  # (34, 34, 34, 8)
@@ -83,7 +88,7 @@ def cae_decoder():
     x = UpSampling3D(pool_size)(x)
     x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
 
-    decoder = Conv3DTranspose(1, conv_size, activation='linear', name='decoded')(x)
+    decoder = Conv3DTranspose(1, conv_size, activation='sigmoid', name='decoded')(x)
 
     model = Model(inputs=inputs, output=decoder)
 
@@ -105,9 +110,9 @@ def top_level_classifier():
     inputs = Input(shape=(cae_output_count, 1))
     x = Flatten()(inputs)
 
-    x = Dense(900, activation=activation_function)(x)
-    x = Dense(500, activation=activation_function)(x)
-    x = Dense(1, activation='softmax')(x)
+    x = Dense(5000, activation=activation_function)(x)
+    x = Dense(100, activation=activation_function)(x)
+    x = Dense(2, activation='softmax')(x)
 
     model = Model(inputs=inputs, output=x)
 
@@ -128,16 +133,16 @@ def cae_classifier_model():
 
     model = Model(encoder.input, top_level(encoder.output))
 
-    model.compile(loss='binary_crossentropy',
+    model.compile(loss='categorical_crossentropy',
                   optimizer='adam',
-                  metrics=["accuracy"])
+                  metrics=["categorical_accuracy"])
 
     return model
 
 
 def batch(indices, f):
     images = f['GMD']
-    labels = f['label']
+    labels = f['one_hot_label']
 
     while True:
         np.random.shuffle(indices)
@@ -145,13 +150,6 @@ def batch(indices, f):
         for index in indices:
             try:
                 label = labels[index]
-
-                #if label == 2:
-                #    label = 0
-
-                # one_hot_label = [0, 1]
-                # if label == 1:
-                #    one_hot_label = [1, 0]
 
                 yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...], label[np.newaxis, ...])
             except:
@@ -225,6 +223,9 @@ def visualize_cae(results_dir, model, indices, f):
     test_img = nib.Nifti1Image(resize_image_with_crop_or_pad(img_data[2], image_size, mode='constant'), affine=aff)
     nib.save(test_img, results_dir + 'test_img.nii')
 
+    avg_img = nib.load(average_image_file)
+    avg_img = avg_img.get_data()
+
     worst_img = nib.Nifti1Image(min_img, affine=aff)
     print("Sum of worst image is %f" % np.sum(min_img))
     nib.nifti1.save(worst_img, results_dir + 'worst_img.nii')
@@ -238,8 +239,40 @@ def visualize_cae(results_dir, model, indices, f):
     best_img = nib.Nifti1Image(max_orig, affine=aff)
     nib.nifti1.save(best_img, results_dir + 'best_img_orig.nii')
     print("Sum of best image original is %f" % np.sum(max_orig))
+    print("Sum of average image is %f" % np.sum(avg_img))
     print("Original size is ", max_orig.shape)
     print("NIFTI size is ", test_img.shape)
+
+
+def test_stacked_classifer(model, test_indices, f):
+    images = f['GMD']
+    labels = f['label']
+
+    for i in test_indices:
+        img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
+        label = labels[i]
+
+        pred = model.predict(img)
+
+        if pred == label:
+            print("%i C (%i=%i)" % (i, label, pred))
+        else:
+            print("%i I (%i:%i)" % (i, label, pred))
+
+
+def save_average_img():
+    f = h5py.File(workdir + data_file, 'r')
+    images = f['GMD']
+
+    avg_img = np.zeros(image_size)
+    for img in images:
+        avg_img += img
+
+    avg_img /= len(images)
+
+    aff = np.eye(4)
+    img = nib.Nifti1Image(avg_img, aff)
+    nib.nifti1.save(img, average_image_file)
 
 
 def plot_metrics(hist, results_dir, fn):
@@ -349,7 +382,9 @@ if __name__ == "__main__":
 
     plot_metrics(hist, results_dir, results_plot_filename)
 
-    if not train_stacked_model:
+    if train_stacked_model:
+        test_stacked_classifer(model, test_indices, f)
+    else:
         visualize_cae(results_dir, model, test_indices, f)
 
     print('This experiment brought to you by the number:', experiment_number)
