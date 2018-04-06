@@ -246,7 +246,7 @@ def visualize_cae(results_dir, model, indices, f):
 
 def test_stacked_classifer(model, test_indices, f):
     images = f['GMD']
-    labels = f['label']
+    labels = f['one_hot_label']
 
     for i in test_indices:
         img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
