@@ -1,13 +1,14 @@
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Activation, Conv3D, MaxPooling3D, Flatten, BatchNormalization
 from keras.layers import Conv3DTranspose, Reshape, UpSampling3D, Input, Lambda
-from keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard
 from keras.models import load_model
 from keras.optimizers import SGD, Adam
 from keras.utils import to_categorical
 from numpy.random import seed
 from tensorflow import set_random_seed
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
+from sklearn.utils import class_weight
 import nibabel as nib
 import numpy as np
 import h5py
@@ -191,16 +192,16 @@ def cae_classifier_model():
 
     model = Model(encoder.input, top_level(encoder.output))
 
-    model.compile(loss='binary_crossentropy',
+    model.compile(loss='categorical_crossentropy',
                   optimizer='adam',
-                  metrics=["binary_accuracy"])
+                  metrics=["categorical_accuracy"])
 
     return model
 
 
 def batch(indices, f):
     images = f['GMD']
-    labels = f['label']
+    labels = f['one_hot_label']
 
     while True:
         np.random.shuffle(indices)
@@ -304,24 +305,24 @@ def visualize_cae(results_dir, model, indices, f):
 
 def test_stacked_classifer(model, test_indices, f):
     images = f['GMD']
-    labels = f['label']
+    labels = f['one_hot_label']
 
     for i in test_indices:
         img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
         label = labels[i]
 
-        pred = model.predict_on_batch(img)[0][0]
+        output = model.predict(img)[0]
+        #print(output)
+        pred = np.argmax(output, axis=-1)  # axis=-1, last axis
 
-        if isinstance(label, int):
-            if pred == label:
-                print("%i C (%i=%i)" % (i, label, pred))
-            else:
-                print("%i I (%i:%i)" % (i, label, pred))
+        prediction = [1, 0]
+        if pred == 1:
+            prediction = [0, 1]
+
+        if np.array_equal(prediction, label):
+            print("%i C " % i, label, prediction)
         else:
-            if np.array_equal(pred, label):
-                print("%i C " % i, label, pred)
-            else:
-                print("%i I " % i, label, pred)
+            print("%i I " % i, label, prediction)
 
 
 def save_average_img():
@@ -381,6 +382,8 @@ if __name__ == "__main__":
     images = f['GMD']
     labels = f['label'].value
 
+    class_weights = class_weight.compute_class_weight('balanced', np.unique(labels), labels)
+
     pac2018_indices = list(range(len(images)))
 
     # 3D CAE
@@ -410,18 +413,18 @@ if __name__ == "__main__":
 
     if train_stacked_model:
         print("Training stacked classifier model")
-        model = cae_classifier_model()  # binary_classifier()
+        model = cae_classifier_one_hot_model()  # binary_classifier()
         best_model_filename = workdir + 'best_stacked_model.hdf5'
         model_filename = results_dir + 'stacked_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_stacked'
         results_plot_filename = 'results_stacked.png'
         batch_func = batch
-        monitor = 'val_binary_accuracy'
-        metric1 = 'binary_accuracy'
-        metric2 = 'val_binary_accuracy'
-        # monitor = 'val_categorical_accuracy'
-        # metric1 = 'categorical_accuracy'
-        # metric2 = 'val_categorical_accuracy'
+        # monitor = 'val_binary_accuracy'
+        # metric1 = 'binary_accuracy'
+        # metric2 = 'val_binary_accuracy'
+        monitor = 'val_categorical_accuracy'
+        metric1 = 'categorical_accuracy'
+        metric2 = 'val_categorical_accuracy'
     else:
         print("Training 3D convolutional autoencoder")
         model = cae_model()
@@ -443,14 +446,15 @@ if __name__ == "__main__":
     model_checkpoint = ModelCheckpoint(best_model_filename,
                                        monitor=monitor,
                                        save_best_only=True)
+    tensorboard = TensorBoard(log_dir=results_dir + '/logs', histogram_freq=0, write_graph=True, write_grads=True, write_images=True)
 
     hist = model.fit_generator(
         batch_func(train_indices, f),
         len(train_indices),
         epochs=num_epochs,
-        callbacks=[model_checkpoint],  # , early_stopping
+        callbacks=[model_checkpoint, tensorboard],  # , early_stopping
         validation_data=batch_func(validation_indices, f),
-        validation_steps=len(validation_indices)
+        validation_steps=len(validation_indices), class_weight=class_weights
     )
 
     model.load_weights(best_model_filename)
