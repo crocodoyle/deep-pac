@@ -47,6 +47,8 @@ cae_filter_count = 8
 cae_output_shape = (15, 15, 15, cae_filter_count)  # (34, 34, 34, 8)
 cae_output_count = cae_output_shape[0]*cae_output_shape[1]*cae_output_shape[2]*cae_output_shape[3]
 
+layers_to_watch = ['classifier_input', 'output']
+
 
 def cae_encoder(trainable=True):
     # 3D Convolutional Auto-Encoder
@@ -66,8 +68,6 @@ def cae_encoder(trainable=True):
     encoder = Flatten(name='encoded', trainable=trainable)(x)
 
     model = Model(inputs=inputs, outputs=encoder)
-
-    model.summary()
 
     return model
 
@@ -141,24 +141,23 @@ def binary_classifier():
 
 def top_level_classifier():
     inputs = Input(shape=(cae_output_count, 1))
-    x = Flatten()(inputs)
+    x = Flatten(name='classifier_input')(inputs)
+
+    x = BatchNormalization()(x)
+
+    x = Dense(500, activation=activation_function)(x)
+
+    x = Dropout(0.5)(x)
+    x = BatchNormalization()(x)
+
+    x = Dense(100, activation=activation_function)(x)
+
+    x = Dropout(0.5)(x)
 
     x = Dense(50, activation=activation_function)(x)
-    x = Dense(10, activation=activation_function)(x)
-    x = Dense(2, activation='softmax')(x)
+    x = Dropout(0.5)(x)
 
-    model = Model(inputs=inputs, outputs=x)
-
-    return model
-
-
-def top_level_one_hot_classifier():
-    inputs = Input(shape=(cae_output_count, 1))
-    x = Flatten()(inputs)
-
-    x = Dense(50, activation=activation_function)(x)
-    x = Dense(10, activation=activation_function)(x)
-    x = Dense(2, activation='softmax')(x)
+    x = Dense(2, activation='softmax', name='output')(x)
 
     model = Model(inputs=inputs, outputs=x)
 
@@ -446,7 +445,9 @@ if __name__ == "__main__":
     model_checkpoint = ModelCheckpoint(best_model_filename,
                                        monitor=monitor,
                                        save_best_only=True)
-    tensorboard = TensorBoard(log_dir=results_dir + '/logs', histogram_freq=0, write_graph=True, write_grads=True, write_images=True)
+    tensorboard = TensorBoard(log_dir='./logs/' + str(experiment_number), histogram_freq=0, write_graph=True,
+                              write_grads=True,
+                              write_images=True)
 
     hist = model.fit_generator(
         batch_func(train_indices, f),
