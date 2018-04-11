@@ -20,17 +20,17 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 # Set seed for experiment replicability
-random_seed = 38493
-seed(random_seed)
-set_random_seed(random_seed)
+#random_seed = 38493
+#seed(random_seed)
+#set_random_seed(random_seed)
 
 workdir = os.path.expanduser('~/pac2018_root/')
 cae_model_file = workdir + 'experiment-62/3d_cae_model.hdf5'  # 'experiment-1/3d_cae_model.hdf5' 62 is deep, 1 is shallow
 data_file = 'pac2018.hdf5'
 average_image_file = workdir + 'average_nifti.nii'
 
-image_size = (152, 152, 152)    # (121, 145, 121) is original size, resized in make_dataset.py
-input_size = (152, 152, 152, 1) # Input size to 3D CAE
+image_size = (152, 152, 152)     # (121, 145, 121) is original size, resized in make_dataset.py
+input_size = (152, 152, 152, 1)  # Input size to 3D CAE
 
 conv_size = (3, 3, 3)
 pool_size = (2, 2, 2)
@@ -90,7 +90,7 @@ def cae_decoder():
 
     decoder = Conv3DTranspose(1, conv_size, activation='sigmoid', name='decoded')(x)
 
-    model = Model(inputs=inputs, output=decoder)
+    model = Model(inputs=inputs, outputs=decoder)
 
     return model
 
@@ -106,15 +106,60 @@ def cae_model():
     return autoencoder
 
 
+def binary_classifier():
+    inputs = Input(shape=input_size)
+
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function)(inputs)
+    x = MaxPooling3D(pool_size=pool_size)(x)
+
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = MaxPooling3D(pool_size=pool_size)(x)
+
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = MaxPooling3D(pool_size=pool_size)(x)
+
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = MaxPooling3D(pool_size=pool_size)(x)
+
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function)(x)
+
+    encoder = Flatten(name='encoded')(x)
+
+    x = Dense(50, activation=activation_function)(encoder)
+    x = Dense(10, activation=activation_function)(x)
+    x = Dense(1, activation='sigmoid')(x)
+
+    model = Model(inputs=inputs, outputs=x)
+
+    model.compile(loss='binary_crossentropy',
+                  optimizer='adam',
+                  metrics=["binary_accuracy"])
+
+    return model
+
+
 def top_level_classifier():
     inputs = Input(shape=(cae_output_count, 1))
     x = Flatten()(inputs)
 
-    x = Dense(5000, activation=activation_function)(x)
-    x = Dense(100, activation=activation_function)(x)
+    x = Dense(50, activation=activation_function)(x)
+    x = Dense(10, activation=activation_function)(x)
+    x = Dense(1, activation='sigmoid')(x)
+
+    model = Model(inputs=inputs, outputs=x)
+
+    return model
+
+
+def top_level_one_hot_classifier():
+    inputs = Input(shape=(cae_output_count, 1))
+    x = Flatten()(inputs)
+
+    x = Dense(50, activation=activation_function)(x)
+    x = Dense(10, activation=activation_function)(x)
     x = Dense(2, activation='softmax')(x)
 
-    model = Model(inputs=inputs, output=x)
+    model = Model(inputs=inputs, outputs=x)
 
     return model
 
@@ -127,7 +172,7 @@ def load_cae(path):
     return encoder
 
 
-def cae_classifier_model():
+def cae_classifier_one_hot_model():
     encoder = load_cae(cae_model_file)
     top_level = top_level_classifier()
 
@@ -140,9 +185,22 @@ def cae_classifier_model():
     return model
 
 
+def cae_classifier_model():
+    encoder = load_cae(cae_model_file)
+    top_level = top_level_classifier()
+
+    model = Model(encoder.input, top_level(encoder.output))
+
+    model.compile(loss='binary_crossentropy',
+                  optimizer='adam',
+                  metrics=["binary_accuracy"])
+
+    return model
+
+
 def batch(indices, f):
     images = f['GMD']
-    labels = f['one_hot_label']
+    labels = f['label']
 
     while True:
         np.random.shuffle(indices)
@@ -185,7 +243,7 @@ def visualize_cae(results_dir, model, indices, f):
     acc_index = 0
     k = 0
     for mn in model.metrics_names:
-        if mn == 'acc':
+        if mn == 'acc' or mn == 'categorical_accuracy':
             acc_index = k
         k += 1
 
@@ -246,18 +304,24 @@ def visualize_cae(results_dir, model, indices, f):
 
 def test_stacked_classifer(model, test_indices, f):
     images = f['GMD']
-    labels = f['one_hot_label']
+    labels = f['label']
 
     for i in test_indices:
         img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
         label = labels[i]
 
-        pred = model.predict(img)
+        pred = model.predict_on_batch(img)[0][0]
 
-        if pred == label:
-            print("%i C (%i=%i)" % (i, label, pred))
+        if isinstance(label, int):
+            if pred == label:
+                print("%i C (%i=%i)" % (i, label, pred))
+            else:
+                print("%i I (%i:%i)" % (i, label, pred))
         else:
-            print("%i I (%i:%i)" % (i, label, pred))
+            if np.array_equal(pred, label):
+                print("%i C " % i, label, pred)
+            else:
+                print("%i I " % i, label, pred)
 
 
 def save_average_img():
@@ -275,14 +339,16 @@ def save_average_img():
     nib.nifti1.save(img, average_image_file)
 
 
-def plot_metrics(hist, results_dir, fn):
-    epoch_num = range(len(hist.history['acc']))
+def plot_metrics(hist, results_dir, fn, metric1, metric2):
+    print(hist.history)
+
+    epoch_num = range(len(hist.history[metric1]))
     # train_error = np.subtract(1, np.array(hist.history['acc']))
     # test_error = np.subtract(1, np.array(hist.history['val_acc']))
 
     plt.clf()
-    plt.plot(epoch_num, np.array(hist.history['acc']), label='Training Accuracy')
-    plt.plot(epoch_num, np.array(hist.history['val_acc']), label="Validation Error")
+    plt.plot(epoch_num, np.array(hist.history[metric1]), label='Training Accuracy')
+    plt.plot(epoch_num, np.array(hist.history[metric2]), label="Validation Error")
     plt.legend(shadow=True)
     plt.xlabel("Training Epoch Number")
     plt.ylabel("Error")
@@ -313,7 +379,7 @@ if __name__ == "__main__":
 
     f = h5py.File(workdir + data_file, 'r')
     images = f['GMD']
-    labels = f['label']
+    labels = f['label'].value
 
     pac2018_indices = list(range(len(images)))
 
@@ -323,12 +389,20 @@ if __name__ == "__main__":
     train_indices = pac2018_indices
     train_labels = labels
 
-    skf = StratifiedShuffleSplit(n_splits=1, test_size=0.2)
+    sss_validation = StratifiedShuffleSplit(n_splits=1, test_size=0.3, random_state=42)
+    sss_test = StratifiedShuffleSplit(n_splits=1, test_size=0.5, random_state=42)
 
-    for train, other in skf.split(train_indices, train_labels):
-        train_indices = train
-        validation_indices = other[::2]  # even
-        test_indices = other[1::2]       # odd
+    train_indices, validation_indices, test_indices = None, None, None
+
+    for train_index, validation_index in sss_validation.split(np.zeros(len(labels)), labels):
+        train_indices = train_index
+        validation_indices = validation_index
+
+    labs = labels[validation_indices, ...]
+
+    for validation_index, test_index in sss_test.split(np.zeros(len(labs)), labs):
+        validation_indices = validation_index
+        test_indices = test_index
 
     print('train:', train_indices)
     print('val:', validation_indices)
@@ -336,12 +410,18 @@ if __name__ == "__main__":
 
     if train_stacked_model:
         print("Training stacked classifier model")
-        model = cae_classifier_model()
+        model = cae_classifier_model()  # binary_classifier()
         best_model_filename = workdir + 'best_stacked_model.hdf5'
         model_filename = results_dir + 'stacked_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_stacked'
         results_plot_filename = 'results_stacked.png'
         batch_func = batch
+        monitor = 'val_binary_accuracy'
+        metric1 = 'binary_accuracy'
+        metric2 = 'val_binary_accuracy'
+        # monitor = 'val_categorical_accuracy'
+        # metric1 = 'categorical_accuracy'
+        # metric2 = 'val_categorical_accuracy'
     else:
         print("Training 3D convolutional autoencoder")
         model = cae_model()
@@ -350,22 +430,25 @@ if __name__ == "__main__":
         metrics_filename = results_dir + 'test_metrics_3d_cae'
         results_plot_filename = 'results_3d_cae.png'
         batch_func = batch_cae
+        monitor = 'val_acc'
+        metric1 = 'acc'
+        metric2 = 'val_acc'
 
     # print summary of model
     model.summary()
 
-    num_epochs = 100
+    num_epochs = 10
 
-    early_stopping = EarlyStopping(monitor='val_acc', patience=2)
+    early_stopping = EarlyStopping(monitor=monitor, patience=2)
     model_checkpoint = ModelCheckpoint(best_model_filename,
-                                       monitor="val_acc",
+                                       monitor=monitor,
                                        save_best_only=True)
 
     hist = model.fit_generator(
         batch_func(train_indices, f),
         len(train_indices),
         epochs=num_epochs,
-        callbacks=[model_checkpoint, early_stopping],
+        callbacks=[model_checkpoint],  # , early_stopping
         validation_data=batch_func(validation_indices, f),
         validation_steps=len(validation_indices)
     )
@@ -380,7 +463,7 @@ if __name__ == "__main__":
 
     pickle.dump(metrics, open(metrics_filename, 'wb'))
 
-    plot_metrics(hist, results_dir, results_plot_filename)
+    plot_metrics(hist, results_dir, results_plot_filename, metric1, metric2)
 
     if train_stacked_model:
         test_stacked_classifer(model, test_indices, f)
