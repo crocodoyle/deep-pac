@@ -127,13 +127,13 @@ def binary_classifier():
 
     x = Dense(50, activation=activation_function)(encoder)
     x = Dense(10, activation=activation_function)(x)
-    x = Dense(1, activation='sigmoid')(x)
+    x = Dense(2, activation='softmax')(x)
 
     model = Model(inputs=inputs, outputs=x)
 
-    model.compile(loss='binary_crossentropy',
+    model.compile(loss='categorical_crossentropy',
                   optimizer='adam',
-                  metrics=["binary_accuracy"])
+                  metrics=["categorical_accuracy"])
 
     return model
 
@@ -144,7 +144,7 @@ def top_level_classifier():
 
     x = Dense(50, activation=activation_function)(x)
     x = Dense(10, activation=activation_function)(x)
-    x = Dense(1, activation='sigmoid')(x)
+    x = Dense(2, activation='softmax')(x)
 
     model = Model(inputs=inputs, outputs=x)
 

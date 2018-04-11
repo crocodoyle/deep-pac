@@ -191,10 +191,10 @@ if __name__ == "__main__":
             f['GMD'][i, ...] = gmd_img
             f['regional_GMD_mean'][i, ...] = subject['regional_GMD_mean']
             if subject['label'] == 2:
-                f['label'][i] = 0
+                f['label'][i] = 1
                 f['one_hot_label'][i] = [0, 1]
             else:
-                f['label'][i] = 1
+                f['label'][i] = 0
                 f['one_hot_label'][i] = [1, 0]
             f['orig_label'][i] = subject['label']
             f['site'][i] = subject['site']
