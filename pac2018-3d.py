@@ -41,9 +41,9 @@ cae_optimizer = 'adam'
 cae_metrics = ['accuracy']
 activation_function = 'relu'
 
-train_stacked_model = True
+train_stacked_model = False
 
-cae_filter_count = 8
+cae_filter_count = 64
 cae_output_shape = (15, 15, 15, cae_filter_count)  # (34, 34, 34, 8)
 cae_output_count = cae_output_shape[0]*cae_output_shape[1]*cae_output_shape[2]*cae_output_shape[3]
 
@@ -63,11 +63,16 @@ def cae_encoder(trainable=True):
     x = Conv3D(cae_filter_count, conv_size, activation=activation_function, trainable=trainable)(x)
     x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
+   # x = Conv3D(cae_filter_count, conv_size, activation=activation_function, trainable=trainable)(x)
+   # x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
+
     x = Conv3D(cae_filter_count, conv_size, activation=activation_function, trainable=trainable)(x)
 
     encoder = Flatten(name='encoded', trainable=trainable)(x)
 
     model = Model(inputs=inputs, outputs=encoder)
+
+    model.summary()
 
     return model
 
@@ -79,6 +84,9 @@ def cae_decoder():
     x = Reshape(cae_output_shape)(inputs)
 
     x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
+
+  #  x = UpSampling3D(pool_size)(x)
+  #  x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
 
     x = UpSampling3D(pool_size)(x)
     x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
@@ -92,6 +100,8 @@ def cae_decoder():
     decoder = Conv3DTranspose(1, conv_size, activation='sigmoid', name='decoded')(x)
 
     model = Model(inputs=inputs, outputs=decoder)
+
+    model.summary()
 
     return model
 
