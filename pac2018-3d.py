@@ -1,6 +1,6 @@
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Activation, Conv3D, MaxPooling3D, Flatten, BatchNormalization
-from keras.layers import Conv3DTranspose, Reshape, UpSampling3D, Input, Lambda
+from keras.layers import Conv3DTranspose, Reshape, UpSampling3D, Input, Lambda, ZeroPadding3D, Cropping3D
 from keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard
 from keras.models import load_model
 from keras.optimizers import SGD, Adam
@@ -36,7 +36,7 @@ input_size = (152, 152, 152, 1)  # Input size to 3D CAE
 conv_size = (3, 3, 3)
 pool_size = (2, 2, 2)
 
-cae_loss_function = 'binary_crossentropy'
+cae_loss_function = 'mean_squared_error' #binary_crossentropy
 cae_optimizer = 'adam'
 cae_metrics = ['accuracy']
 activation_function = 'relu'
@@ -54,19 +54,23 @@ def cae_encoder(trainable=True):
     # 3D Convolutional Auto-Encoder
     inputs = Input(shape=input_size)
 
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, trainable=trainable)(inputs)
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(inputs)
     x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, trainable=trainable)(x)
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
     x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, trainable=trainable)(x)
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
+    x = ZeroPadding3D(padding=(1, 1, 1))(x)
     x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, trainable=trainable)(x)
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
     x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, trainable=trainable)(x)
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
+    x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
+
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
 
     encoder = Flatten(name='encoded', trainable=trainable)(x)
 
@@ -83,26 +87,26 @@ def cae_decoder():
 
     x = Reshape(cae_output_shape)(inputs)
 
-    x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
 
     x = UpSampling3D(pool_size)(x)
-    x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
 
     x = UpSampling3D(pool_size)(x)
-    x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
 
     x = UpSampling3D(pool_size)(x)
-    x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
+
+    x = Cropping3D()(x)
 
     x = UpSampling3D(pool_size)(x)
-    x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
 
-    x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
-    x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
-    x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
-    x = Conv3DTranspose(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = UpSampling3D(pool_size)(x)
+    x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
 
-    decoder = Conv3DTranspose(1, conv_size, activation='sigmoid', name='decoded')(x)
+    decoder = Conv3DTranspose(1, conv_size, padding='same', activation='sigmoid', name='decoded')(x)
 
     model = Model(inputs=inputs, outputs=decoder)
 
