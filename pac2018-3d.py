@@ -36,7 +36,7 @@ input_size = (152, 152, 152, 1)  # Input size to 3D CAE
 conv_size = (3, 3, 3)
 pool_size = (2, 2, 2)
 
-cae_loss_function = 'mean_squared_error' #binary_crossentropy
+cae_loss_function = 'binary_crossentropy'
 cae_optimizer = 'adam'
 cae_metrics = ['accuracy']
 activation_function = 'relu'
