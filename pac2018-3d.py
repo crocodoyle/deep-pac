@@ -442,6 +442,7 @@ if __name__ == "__main__":
         monitor = 'val_categorical_accuracy'
         metric1 = 'categorical_accuracy'
         metric2 = 'val_categorical_accuracy'
+        callbacks = []
     else:
         print("Training 3D convolutional autoencoder")
         model = cae_model()
@@ -450,7 +451,7 @@ if __name__ == "__main__":
         metrics_filename = results_dir + 'test_metrics_3d_cae'
         results_plot_filename = 'results_3d_cae.png'
         batch_func = batch_cae
-        monitor = 'val_acc'
+        monitor = 'val_loss'
         metric1 = 'acc'
         metric2 = 'val_acc'
 
