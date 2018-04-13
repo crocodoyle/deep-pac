@@ -36,15 +36,14 @@ input_size = (152, 152, 152, 1)  # Input size to 3D CAE
 conv_size = (3, 3, 3)
 pool_size = (2, 2, 2)
 
-cae_loss_function = 'binary_crossentropy'
+cae_loss_function = 'mean_squared_error'
 cae_optimizer = 'adam'
-cae_metrics = ['accuracy']
 activation_function = 'relu'
 
 train_stacked_model = False
 
 cae_filter_count = 64
-cae_output_shape = (5, 5, 5, cae_filter_count)  # (34, 34, 34, 8)
+cae_output_shape = (10, 10, 10, cae_filter_count)  # (34, 34, 34, 8)
 cae_output_count = cae_output_shape[0]*cae_output_shape[1]*cae_output_shape[2]*cae_output_shape[3]
 
 layers_to_watch = ['classifier_input', 'output']
@@ -67,8 +66,8 @@ def cae_encoder(trainable=True):
     x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
     x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
-    x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
+   # x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
+   # x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
     x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
 
@@ -89,8 +88,8 @@ def cae_decoder():
 
     x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
 
-    x = UpSampling3D(pool_size)(x)
-    x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
+  #  x = UpSampling3D(pool_size)(x)
+  #  x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
 
     x = UpSampling3D(pool_size)(x)
     x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
@@ -121,7 +120,7 @@ def cae_model():
 
     autoencoder = Model(encoder.input, decoder(encoder.output))
 
-    autoencoder.compile(loss=cae_loss_function, optimizer=cae_optimizer, metrics=cae_metrics)
+    autoencoder.compile(loss=cae_loss_function, optimizer=cae_optimizer)
 
     return autoencoder
 
@@ -187,7 +186,7 @@ def load_cae(path):
     # Load Encoder with model weights
     encoder = cae_encoder(False)
     encoder.load_weights(path, by_name=True)
-    encoder.compile(loss=cae_loss_function, optimizer=cae_optimizer, metrics=cae_metrics)
+    encoder.compile(loss=cae_loss_function, optimizer=cae_optimizer)
     return encoder
 
 
