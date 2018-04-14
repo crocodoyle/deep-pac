@@ -43,7 +43,7 @@ activation_function = 'relu'
 train_stacked_model = False
 
 cae_filter_count = 64
-cae_output_shape = (10, 10, 10, cae_filter_count)  # (34, 34, 34, 8)
+cae_output_shape = (5, 5, 5, cae_filter_count)  # (34, 34, 34, 8)
 cae_output_count = cae_output_shape[0]*cae_output_shape[1]*cae_output_shape[2]*cae_output_shape[3]
 
 layers_to_watch = ['classifier_input', 'output']
@@ -66,8 +66,8 @@ def cae_encoder(trainable=True):
     x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
     x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
-   # x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
-   # x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
+    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
+    x = MaxPooling3D(pool_size=pool_size, trainable=trainable)(x)
 
     x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same', trainable=trainable)(x)
 
@@ -88,8 +88,8 @@ def cae_decoder():
 
     x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
 
-  #  x = UpSampling3D(pool_size)(x)
-  #  x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
+    x = UpSampling3D(pool_size)(x)
+    x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
 
     x = UpSampling3D(pool_size)(x)
     x = Conv3DTranspose(cae_filter_count, conv_size, padding='same', activation=activation_function)(x)
@@ -431,29 +431,19 @@ if __name__ == "__main__":
     if train_stacked_model:
         print("Training stacked classifier model")
         model = cae_classifier_one_hot_model()  # binary_classifier()
-        best_model_filename = workdir + 'best_stacked_model.hdf5'
+        best_model_filename = results_dir + 'best_stacked_model.hdf5'
         model_filename = results_dir + 'stacked_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_stacked'
-        results_plot_filename = 'results_stacked.png'
         batch_func = batch
-        # monitor = 'val_binary_accuracy'
-        # metric1 = 'binary_accuracy'
-        # metric2 = 'val_binary_accuracy'
         monitor = 'val_categorical_accuracy'
-        metric1 = 'categorical_accuracy'
-        metric2 = 'val_categorical_accuracy'
-        callbacks = []
     else:
         print("Training 3D convolutional autoencoder")
         model = cae_model()
-        best_model_filename = workdir + 'best_3d_cae_model.hdf5'
+        best_model_filename = results_dir + 'best_3d_cae_model.hdf5'
         model_filename = results_dir + '3d_cae_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_3d_cae'
-        results_plot_filename = 'results_3d_cae.png'
         batch_func = batch_cae
         monitor = 'val_loss'
-        metric1 = 'acc'
-        metric2 = 'val_acc'
 
     # print summary of model
     model.summary()
@@ -486,8 +476,6 @@ if __name__ == "__main__":
     print(metrics)
 
     pickle.dump(metrics, open(metrics_filename, 'wb'))
-
-    plot_metrics(hist, results_dir, results_plot_filename, metric1, metric2)
 
     if train_stacked_model:
         test_stacked_classifer(model, test_indices, f)
