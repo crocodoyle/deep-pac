@@ -258,16 +258,11 @@ def visualize_cae(results_dir, model, indices, f):
     from make_dataset import resize_image_with_crop_or_pad
     images = f['GMD']
 
-    acc_index = 0
-    k = 0
-    for mn in model.metrics_names:
-        if mn == 'acc' or mn == 'categorical_accuracy':
-            acc_index = k
-        k += 1
+    loss_index = 0
 
-    min_acc = 1.01
+    min_loss = 1.01
     min_id = -1
-    max_acc = 0.00
+    max_loss = 0.00
     max_id = -1
     min_img = []
     min_orig = []
@@ -280,15 +275,15 @@ def visualize_cae(results_dir, model, indices, f):
         eval = model.evaluate(img, img)
         pred = model.predict(img)
 
-        acc = eval[acc_index]
+        loss = eval[loss_index]
 
-        if acc > max_acc:
-            max_acc = acc
+        if loss > max_loss:
+            max_loss = loss
             max_id = index
             max_img = np.reshape(pred, image_size)
             max_orig = np.reshape(img, image_size)
-        if acc < min_acc:
-            min_acc = acc
+        if loss < min_loss:
+            min_loss = loss
             min_id = index
             min_img = np.reshape(pred, image_size)
             min_orig = np.reshape(img, image_size)
@@ -302,21 +297,21 @@ def visualize_cae(results_dir, model, indices, f):
     avg_img = nib.load(average_image_file)
     avg_img = avg_img.get_data()
 
-    worst_img = nib.Nifti1Image(min_img, affine=aff)
-    print("Sum of worst image is %f" % np.sum(min_img))
+    worst_img = nib.Nifti1Image(max_img, affine=aff)
+    print("Sum of worst image is %f" % np.sum(max_img))
     nib.nifti1.save(worst_img, results_dir + 'worst_img.nii')
-    worst_img = nib.Nifti1Image(min_orig, affine=aff)
-    print("Sum of worst image original is %f" % np.sum(min_orig))
+    worst_img = nib.Nifti1Image(max_orig, affine=aff)
+    print("Sum of worst image original is %f" % np.sum(max_orig))
 
     nib.nifti1.save(worst_img, results_dir + 'worst_img_orig.nii')
-    best_img = nib.Nifti1Image(max_img, affine=aff)
-    print("Sum of best image is %f" % np.sum(max_img))
+    best_img = nib.Nifti1Image(min_img, affine=aff)
+    print("Sum of best image is %f" % np.sum(min_img))
     nib.nifti1.save(best_img, results_dir + 'best_img.nii')
-    best_img = nib.Nifti1Image(max_orig, affine=aff)
+    best_img = nib.Nifti1Image(min_orig, affine=aff)
     nib.nifti1.save(best_img, results_dir + 'best_img_orig.nii')
-    print("Sum of best image original is %f" % np.sum(max_orig))
+    print("Sum of best image original is %f" % np.sum(min_orig))
     print("Sum of average image is %f" % np.sum(avg_img))
-    print("Original size is ", max_orig.shape)
+    print("Original size is ", min_orig.shape)
     print("NIFTI size is ", test_img.shape)
 
 
