@@ -258,8 +258,6 @@ def visualize_cae(results_dir, model, indices, f):
     from make_dataset import resize_image_with_crop_or_pad
     images = f['GMD']
 
-    loss_index = 0
-
     min_loss = 1.01
     min_id = -1
     max_loss = 0.00
@@ -275,7 +273,7 @@ def visualize_cae(results_dir, model, indices, f):
         eval = model.evaluate(img, img)
         pred = model.predict(img)
 
-        loss = eval[loss_index]
+        loss = eval
 
         if loss > max_loss:
             max_loss = loss
