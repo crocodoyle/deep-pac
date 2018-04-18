@@ -190,6 +190,7 @@ if __name__ == "__main__":
             f['id'][i] = int(subject['id'][8:])
             f['GMD'][i, ...] = gmd_img
             f['regional_GMD_mean'][i, ...] = subject['regional_GMD_mean']
+            f['regional_GMD_var'][i, ...] = subject['regional_GMD_var']
             if subject['label'] == 2:
                 f['label'][i] = 1
                 f['one_hot_label'][i] = [0, 1]
