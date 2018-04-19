@@ -248,9 +248,9 @@ def top_level_classifier():
     return model
 
 
-def load_cae(path):
+def load_cae(path, trainable=False):
     # Load Encoder with model weights
-    encoder = cae_encoder(False)
+    encoder = cae_encoder(trainable)
     encoder.load_weights(path, by_name=True)
     encoder.compile(loss=cae_loss_function, optimizer=cae_optimizer)
     return encoder
@@ -291,7 +291,7 @@ def merged_classifier():
     inputs_mean = Input(shape=mean_input_size)
     inputs_var = Input(shape=mean_input_size)
 
-    encoder = load_cae(cae_model_file)
+    encoder = load_cae(cae_model_file, trainable=True)
 
     # x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same')(inputs_gmd)
     # x = MaxPooling3D(pool_size=pool_size)(x)
