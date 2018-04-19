@@ -73,56 +73,6 @@ layers_to_watch = ['classifier_input', 'output']
 # 19, 19, 19, 96, mse (241): had 0.0395 test loss BUT EMPTY reconstructed images
 
 
-def merged_classifier():
-    inputs_gmd = Input(shape=input_size)
-    inputs_age = Input(shape=single_input_size)
-    inputs_site = Input(shape=single_input_size)
-    inputs_gender = Input(shape=single_input_size)
-    inputs_tiv = Input(shape=single_input_size)
-    inputs_mean = Input(shape=mean_input_size)
-    inputs_var = Input(shape=mean_input_size)
-
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same')(inputs_gmd)
-    x = MaxPooling3D(pool_size=pool_size)(x)
-
-    x = Conv3D(cae_filter_count*2, conv_size, activation=activation_function, padding='same')(x)
-    x = MaxPooling3D(pool_size=pool_size)(x)
-
-    x = Conv3D(cae_filter_count*4, conv_size, activation=activation_function, padding='same')(x)
-    x = ZeroPadding3D(padding=(1, 1, 1))(x)
-    x = MaxPooling3D(pool_size=pool_size)(x)
-
-    x = Conv3D(cae_filter_count*8, conv_size, activation=activation_function, padding='same')(x)
-    x = MaxPooling3D(pool_size=pool_size)(x)
-
-    x = Conv3D(cae_filter_count*16, conv_size, activation=activation_function, padding='same')(x)
-    x = MaxPooling3D(pool_size=pool_size)(x)
-
-    x = Conv3D(cae_filter_count*2, conv_size, activation=activation_function, padding='same')(x)
-
-    x = Flatten()(x)
-
-    x1 = Dense(50, activation=activation_function)(inputs_mean)
-    x2 = Dense(50, activation=activation_function)(inputs_var)
-
-    single_concat = concatenate([inputs_age, inputs_site, inputs_gender, inputs_tiv])
-
-    x = concatenate([x1, x2, single_concat, x])
-    x = Dense(50, activation=activation_function)(x)
-    x = Dense(10, activation=activation_function)(x)
-
-    x = Dense(2, activation='softmax')(x)
-
-    model = Model(inputs=[inputs_gmd, inputs_age, inputs_site, inputs_gender, inputs_tiv, inputs_mean, inputs_var],
-                  outputs=x)
-
-    model.compile(loss='categorical_crossentropy',
-                  optimizer='adam',
-                  metrics=["categorical_accuracy"])
-
-    return model
-
-
 def mean_classifier():
     inputs1 = Input(shape=mean_input_size)
     inputs2 = Input(shape=mean_input_size)
@@ -324,6 +274,59 @@ def cae_classifier_model():
     top_level = top_level_classifier()
 
     model = Model(encoder.input, top_level(encoder.output))
+
+    model.compile(loss='categorical_crossentropy',
+                  optimizer='adam',
+                  metrics=["categorical_accuracy"])
+
+    return model
+
+
+def merged_classifier():
+    inputs_gmd = Input(shape=input_size)
+    inputs_age = Input(shape=single_input_size)
+    inputs_site = Input(shape=single_input_size)
+    inputs_gender = Input(shape=single_input_size)
+    inputs_tiv = Input(shape=single_input_size)
+    inputs_mean = Input(shape=mean_input_size)
+    inputs_var = Input(shape=mean_input_size)
+
+    encoder = load_cae(cae_model_file)
+
+    # x = Conv3D(cae_filter_count, conv_size, activation=activation_function, padding='same')(inputs_gmd)
+    # x = MaxPooling3D(pool_size=pool_size)(x)
+    #
+    # x = Conv3D(cae_filter_count*2, conv_size, activation=activation_function, padding='same')(x)
+    # x = MaxPooling3D(pool_size=pool_size)(x)
+    #
+    # x = Conv3D(cae_filter_count*4, conv_size, activation=activation_function, padding='same')(x)
+    # x = ZeroPadding3D(padding=(1, 1, 1))(x)
+    # x = MaxPooling3D(pool_size=pool_size)(x)
+    #
+    # x = Conv3D(cae_filter_count*8, conv_size, activation=activation_function, padding='same')(x)
+    # x = MaxPooling3D(pool_size=pool_size)(x)
+    #
+    # x = Conv3D(cae_filter_count*16, conv_size, activation=activation_function, padding='same')(x)
+    # x = MaxPooling3D(pool_size=pool_size)(x)
+    #
+    # x = Conv3D(cae_filter_count*2, conv_size, activation=activation_function, padding='same')(x)
+    #
+    # x = Flatten()(x)
+
+    x1 = Dense(50, activation=activation_function)(inputs_mean)
+    x2 = Dense(50, activation=activation_function)(inputs_var)
+
+    single_concat = concatenate([inputs_age, inputs_site, inputs_gender, inputs_tiv])
+    dense_single = Dense(4, activation=activation_function)(single_concat)
+
+    x = concatenate([x1, x2, dense_single, encoder(inputs_gmd)])
+    x = Dense(50, activation=activation_function)(x)
+    x = Dense(10, activation=activation_function)(x)
+
+    x = Dense(2, activation='softmax')(x)
+
+    model = Model(inputs=[inputs_gmd, inputs_age, inputs_site, inputs_gender, inputs_tiv, inputs_mean, inputs_var],
+                  outputs=x)
 
     model.compile(loss='categorical_crossentropy',
                   optimizer='adam',
