@@ -2,7 +2,7 @@ from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Activation, Conv3D, MaxPooling3D, Flatten, BatchNormalization, TimeDistributed
 from keras.layers import Conv3DTranspose, Reshape, UpSampling3D, Input, Lambda, ZeroPadding3D, Cropping3D
 from keras.layers import Conv2D, MaxPooling2D, concatenate
-from keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard
+from keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard, ReduceLROnPlateau
 from keras.models import load_model
 from keras.applications.inception_v3 import InceptionV3
 from keras.optimizers import SGD, Adam
@@ -315,17 +315,21 @@ def merged_classifier():
 
     x1 = BatchNormalization()(inputs_mean)
     x2 = BatchNormalization()(inputs_var)
-    x1 = Dense(100, activation=activation_function)(x1)
+    x1 = Dense(100, activation=activation_function, )(x1)
     x2 = Dense(100, activation=activation_function)(x2)
 
     x1 = Dropout(0.5)(x1)
     x2 = Dropout(0.5)(x2)
 
     single_concat = concatenate([inputs_age, inputs_site, inputs_gender, inputs_tiv])
-    xs = BatchNormalization()(single_concat)
-    dense_single = Dense(4, activation=activation_function)(xs)
+    dense_single = Dense(4, activation=activation_function)(single_concat)
 
     x = concatenate([x1, x2, dense_single, encoder(inputs_gmd)])
+
+    x = Dropout(0.5)(x)
+    x = BatchNormalization()(x)
+
+    x = Dense(500, activation=activation_function)(x)
 
     x = Dropout(0.5)(x)
     x = BatchNormalization()(x)
@@ -333,8 +337,13 @@ def merged_classifier():
     x = Dense(200, activation=activation_function)(x)
 
     x = Dropout(0.5)(x)
+    x = BatchNormalization()(x)
 
     x = Dense(100, activation=activation_function)(x)
+
+    x = Dropout(0.5)(x)
+
+    x = Dense(50, activation=activation_function)(x)
 
     x = Dense(2, activation='softmax')(x)
 
@@ -634,6 +643,8 @@ if __name__ == "__main__":
     model_checkpoint = ModelCheckpoint(best_model_filename,
                                        monitor=monitor,
                                        save_best_only=True)
+    reduce_lr = ReduceLROnPlateau(monitor='val_categorical_accuracy', factor=0.2,
+                                  patience=4, min_lr=0.001)
     tensorboard = TensorBoard(log_dir='./logs/' + str(experiment_number), histogram_freq=0, write_graph=True,
                               write_grads=True,
                               write_images=True)
@@ -642,7 +653,7 @@ if __name__ == "__main__":
         batch_func(train_indices, f),
         len(train_indices),
         epochs=num_epochs,
-        callbacks=[model_checkpoint, tensorboard],  # , early_stopping
+        callbacks=[model_checkpoint, tensorboard, reduce_lr],  # , early_stopping
         validation_data=batch_func(validation_indices, f),
         validation_steps=len(validation_indices), class_weight=class_weights
     )
