@@ -313,15 +313,28 @@ def merged_classifier():
     #
     # x = Flatten()(x)
 
-    x1 = Dense(50, activation=activation_function)(inputs_mean)
-    x2 = Dense(50, activation=activation_function)(inputs_var)
+    x1 = BatchNormalization()(inputs_mean)
+    x2 = BatchNormalization()(inputs_var)
+    x1 = Dense(100, activation=activation_function)(x1)
+    x2 = Dense(100, activation=activation_function)(x2)
+
+    x1 = Dropout(0.5)(x1)
+    x2 = Dropout(0.5)(x2)
 
     single_concat = concatenate([inputs_age, inputs_site, inputs_gender, inputs_tiv])
-    dense_single = Dense(4, activation=activation_function)(single_concat)
+    xs = BatchNormalization()(single_concat)
+    dense_single = Dense(4, activation=activation_function)(xs)
 
     x = concatenate([x1, x2, dense_single, encoder(inputs_gmd)])
-    x = Dense(50, activation=activation_function)(x)
-    x = Dense(10, activation=activation_function)(x)
+
+    x = Dropout(0.5)(x)
+    x = BatchNormalization()(x)
+
+    x = Dense(200, activation=activation_function)(x)
+
+    x = Dropout(0.5)(x)
+
+    x = Dense(100, activation=activation_function)(x)
 
     x = Dense(2, activation='softmax')(x)
 
@@ -475,14 +488,26 @@ def visualize_cae(results_dir, model, indices, f):
 
 
 def test_stacked_classifer(model, test_indices, f):
+    means = f['regional_GMD_mean']
+    vars = f['regional_GMD_var']
     images = f['GMD']
     labels = f['one_hot_label']
+    ages = f['age']
+    sites = f['site']
+    genders = f['gender']
+    tivs = f['tiv']
 
     for i in test_indices:
         img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
         label = labels[i]
+        mean = means[i]
+        var = vars[i]
+        age = ages[i]
+        site = sites[i]
+        gender = genders[i]
+        tiv = tivs[i]
 
-        output = model.predict(img)[0]
+        output = model.predict([img, age, site, gender, tiv, mean, var])[0]
         #print(output)
         pred = np.argmax(output, axis=-1)  # axis=-1, last axis
 
