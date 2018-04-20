@@ -77,9 +77,6 @@ def mean_classifier():
     inputs1 = Input(shape=mean_input_size)
     inputs2 = Input(shape=mean_input_size)
 
-   # x1 = BatchNormalization()(inputs1)
-   # x2 = BatchNormalization()(inputs2)
-
     x1 = Dense(50, activation=activation_function)(inputs1)
     x2 = Dense(50, activation=activation_function)(inputs2)
 
@@ -87,7 +84,6 @@ def mean_classifier():
     x = Dense(50, activation=activation_function)(x)
 
     x = Dropout(0.5)(x)
-    x = BatchNormalization()(x)
 
     x = Dense(10, activation=activation_function)(x)
 
@@ -95,8 +91,10 @@ def mean_classifier():
 
     model = Model(inputs=[inputs1, inputs2], outputs=x)
 
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+
     model.compile(loss='categorical_crossentropy',
-                  optimizer='adam',
+                  optimizer=adam,
                   metrics=["categorical_accuracy"])
 
     return model
@@ -220,15 +218,16 @@ def gmd_classifier():
     x = Dense(50, activation=activation_function)(encoder)
 
     x = Dropout(0.5)(x)
-    x = BatchNormalization()(x)
 
     x = Dense(10, activation=activation_function)(x)
     x = Dense(2, activation='softmax')(x)
 
     model = Model(inputs=inputs, outputs=x)
 
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+
     model.compile(loss='categorical_crossentropy',
-                  optimizer='adam',
+                  optimizer=adam,
                   metrics=["categorical_accuracy"])
 
     return model
@@ -238,12 +237,9 @@ def top_level_classifier():
     inputs = Input(shape=(cae_output_count, 1))
     x = Flatten(name='classifier_input')(inputs)
 
-    x = BatchNormalization()(x)
-
     x = Dense(400, activation=activation_function)(x)
 
     x = Dropout(0.5)(x)
-    x = BatchNormalization()(x)
 
     x = Dense(100, activation=activation_function)(x)
 
@@ -326,10 +322,8 @@ def merged_classifier():
     #
     # x = Flatten()(x)
 
-    x1 = BatchNormalization()(inputs_mean)
-    x2 = BatchNormalization()(inputs_var)
-    x1 = Dense(100, activation=activation_function, )(x1)
-    x2 = Dense(100, activation=activation_function)(x2)
+    x1 = Dense(100, activation=activation_function, )(inputs_mean)
+    x2 = Dense(100, activation=activation_function)(inputs_var)
 
     x1 = Dropout(0.5)(x1)
     x2 = Dropout(0.5)(x2)
@@ -340,17 +334,14 @@ def merged_classifier():
     x = concatenate([x1, x2, dense_single, encoder(inputs_gmd)])
 
     x = Dropout(0.5)(x)
-    x = BatchNormalization()(x)
 
     x = Dense(500, activation=activation_function)(x)
 
     x = Dropout(0.5)(x)
-    x = BatchNormalization()(x)
 
     x = Dense(200, activation=activation_function)(x)
 
     x = Dropout(0.5)(x)
-    x = BatchNormalization()(x)
 
     x = Dense(100, activation=activation_function)(x)
 
@@ -509,7 +500,7 @@ def visualize_cae(results_dir, model, indices, f):
     print("NIFTI size is ", test_img.shape)
 
 
-def test_gmd_classifer(model, test_indices, f):
+def test_gmd_classifier(model, test_indices, f):
     images = f['GMD']
     labels = f['one_hot_label']
 
@@ -686,13 +677,13 @@ if __name__ == "__main__":
     if train_stacked_model:
         print("Training stacked classifier model")
         #model = cae_classifier_one_hot_model()
-        model = mean_classifier()  # gmd_classifier()
+        model = gmd_classifier() # mean_classifier()  #
         best_model_filename = results_dir + 'best_stacked_model.hdf5'
         model_filename = results_dir + 'stacked_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_stacked'
-        batch_func = batch_mean_var  # batch
+        batch_func = batch  # batch_mean_var  # batch
         monitor = 'val_categorical_accuracy'
-        test_function = test_mean_classifer  # test_gmd_classifer
+        test_function = test_gmd_classifier  # test_mean_classifer  #
     else:
         print("Training 3D convolutional autoencoder")
         model = cae_model()
@@ -712,7 +703,7 @@ if __name__ == "__main__":
                                        monitor=monitor,
                                        save_best_only=True)
     reduce_lr = ReduceLROnPlateau(monitor='val_categorical_accuracy', factor=0.2,
-                                  patience=4, min_lr=0.001)
+                                  patience=4, min_lr=0.00001)
     tensorboard = TensorBoard(log_dir='./logs/' + str(experiment_number), histogram_freq=0, write_graph=True,
                               write_grads=True,
                               write_images=True)
@@ -721,7 +712,7 @@ if __name__ == "__main__":
         batch_func(train_indices, f),
         len(train_indices),
         epochs=num_epochs,
-        callbacks=[model_checkpoint, tensorboard, reduce_lr],  # , early_stopping
+        callbacks=[model_checkpoint, tensorboard],  # , early_stopping
         validation_data=batch_func(validation_indices, f),
         validation_steps=len(validation_indices), class_weight=class_weights
     )
