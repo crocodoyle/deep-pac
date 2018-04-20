@@ -77,11 +77,18 @@ def mean_classifier():
     inputs1 = Input(shape=mean_input_size)
     inputs2 = Input(shape=mean_input_size)
 
-    x1 = Dense(50, activation=activation_function)(inputs1)
-    x2 = Dense(50, activation=activation_function)(inputs2)
+    x1 = BatchNormalization()(inputs1)
+    x2 = BatchNormalization()(inputs2)
+
+    x1 = Dense(50, activation=activation_function)(x1)
+    x2 = Dense(50, activation=activation_function)(x2)
 
     x = concatenate([x1, x2])
     x = Dense(50, activation=activation_function)(x)
+
+    x = Dropout(0.5)(x)
+    x = BatchNormalization()(x)
+
     x = Dense(10, activation=activation_function)(x)
 
     x = Dense(2, activation='softmax')(x)
@@ -530,6 +537,11 @@ def test_stacked_classifer(model, test_indices, f):
             print("%i I " % i, label, prediction)
 
 
+def summarize_saved_model(filename):
+    model = load_model(filename)
+
+    model.summary()
+
 def save_average_img():
     f = h5py.File(workdir + data_file, 'r')
     images = f['GMD']
@@ -583,6 +595,8 @@ def setup_experiment(workdir):
 if __name__ == "__main__":
     results_dir, experiment_number = setup_experiment(workdir)
 
+    #summarize_saved_model(workdir + 'experiment-307/stacked_model.hdf5')
+
     f = h5py.File(workdir + data_file, 'r')
     images = f['GMD']
     labels = f['label'].value
@@ -619,7 +633,7 @@ if __name__ == "__main__":
     if train_stacked_model:
         print("Training stacked classifier model")
         #model = cae_classifier_one_hot_model()  # binary_classifier()
-        model = merged_classifier()
+        model = mean_classifier()
         best_model_filename = results_dir + 'best_stacked_model.hdf5'
         model_filename = results_dir + 'stacked_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_stacked'
