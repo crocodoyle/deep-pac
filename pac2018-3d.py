@@ -77,11 +77,11 @@ def mean_classifier():
     inputs1 = Input(shape=mean_input_size)
     inputs2 = Input(shape=mean_input_size)
 
-    x1 = BatchNormalization()(inputs1)
-    x2 = BatchNormalization()(inputs2)
+   # x1 = BatchNormalization()(inputs1)
+   # x2 = BatchNormalization()(inputs2)
 
-    x1 = Dense(50, activation=activation_function)(x1)
-    x2 = Dense(50, activation=activation_function)(x2)
+    x1 = Dense(50, activation=activation_function)(inputs1)
+    x2 = Dense(50, activation=activation_function)(inputs2)
 
     x = concatenate([x1, x2])
     x = Dense(50, activation=activation_function)(x)
@@ -196,26 +196,32 @@ def cae_model():
     return autoencoder
 
 
-def binary_classifier():
+def gmd_classifier():
     inputs = Input(shape=input_size)
 
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function)(inputs)
+    padding = 'same'
+    strides = 2
+    filters = 8
+    cs = (4, 4, 4)
+
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
     x = MaxPooling3D(pool_size=pool_size)(x)
 
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
     x = MaxPooling3D(pool_size=pool_size)(x)
 
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
     x = MaxPooling3D(pool_size=pool_size)(x)
 
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function)(x)
-    x = MaxPooling3D(pool_size=pool_size)(x)
-
-    x = Conv3D(cae_filter_count, conv_size, activation=activation_function)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
 
     encoder = Flatten(name='encoded')(x)
 
     x = Dense(50, activation=activation_function)(encoder)
+
+    x = Dropout(0.5)(x)
+    x = BatchNormalization()(x)
+
     x = Dense(10, activation=activation_function)(x)
     x = Dense(2, activation='softmax')(x)
 
@@ -503,7 +509,53 @@ def visualize_cae(results_dir, model, indices, f):
     print("NIFTI size is ", test_img.shape)
 
 
-def test_stacked_classifer(model, test_indices, f):
+def test_gmd_classifer(model, test_indices, f):
+    images = f['GMD']
+    labels = f['one_hot_label']
+
+    for i in test_indices:
+        img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
+        label = labels[i]
+
+        output = model.predict(img)[0]
+        #print(output)
+        pred = np.argmax(output, axis=-1)  # axis=-1, last axis
+
+        prediction = [1, 0]
+        if pred == 1:
+            prediction = [0, 1]
+
+        if np.array_equal(prediction, label):
+            print("%i C " % i, label, prediction)
+        else:
+            print("%i I " % i, label, prediction)
+
+
+def test_mean_classifer(model, test_indices, f):
+    means = f['regional_GMD_mean']
+    vars = f['regional_GMD_var']
+    labels = f['one_hot_label']
+
+    for i in test_indices:
+        label = labels[i]
+        mean = means[i]
+        var = vars[i]
+
+        output = model.predict([mean, var])[0]
+        #print(output)
+        pred = np.argmax(output, axis=-1)  # axis=-1, last axis
+
+        prediction = [1, 0]
+        if pred == 1:
+            prediction = [0, 1]
+
+        if np.array_equal(prediction, label):
+            print("%i C " % i, label, prediction)
+        else:
+            print("%i I " % i, label, prediction)
+
+
+def test_merged_classifer(model, test_indices, f):
     means = f['regional_GMD_mean']
     vars = f['regional_GMD_var']
     images = f['GMD']
@@ -541,6 +593,7 @@ def summarize_saved_model(filename):
     model = load_model(filename)
 
     model.summary()
+
 
 def save_average_img():
     f = h5py.File(workdir + data_file, 'r')
@@ -632,13 +685,14 @@ if __name__ == "__main__":
 
     if train_stacked_model:
         print("Training stacked classifier model")
-        #model = cae_classifier_one_hot_model()  # binary_classifier()
-        model = mean_classifier()
+        #model = cae_classifier_one_hot_model()
+        model = mean_classifier()  # gmd_classifier()
         best_model_filename = results_dir + 'best_stacked_model.hdf5'
         model_filename = results_dir + 'stacked_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_stacked'
-        batch_func = batch_all
+        batch_func = batch_mean_var  # batch
         monitor = 'val_categorical_accuracy'
+        test_function = test_mean_classifer  # test_gmd_classifer
     else:
         print("Training 3D convolutional autoencoder")
         model = cae_model()
@@ -683,7 +737,7 @@ if __name__ == "__main__":
     pickle.dump(metrics, open(metrics_filename, 'wb'))
 
     if train_stacked_model:
-        test_stacked_classifer(model, test_indices, f)
+        test_function(model, test_indices, f)
     else:
         visualize_cae(results_dir, model, test_indices, f)
 
