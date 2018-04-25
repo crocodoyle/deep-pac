@@ -54,6 +54,11 @@ cae_output_count = cae_output_shape[0]*cae_output_shape[1]*cae_output_shape[2]*c
 
 layers_to_watch = ['classifier_input', 'output']
 
+# custom adam optimizer and gmd_classifier: 0.89 test accuracy
+# next step: add gmd mean/var and site/gender/age/tiv to gmd_classifier and retrain
+
+# below are numbers for CAE
+
 # 19, 19, 19, 96, bce (240): 0.0786 test loss
 
 # 10, 10, 10, 64, bce (245): 0.0712 test loss (requires a zero padding layer)
@@ -91,7 +96,7 @@ def mean_classifier():
 
     model = Model(inputs=[inputs1, inputs2], outputs=x)
 
-    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6, amsgrad=True)
 
     model.compile(loss='categorical_crossentropy',
                   optimizer=adam,
@@ -111,8 +116,10 @@ def classifer_25D():
 
     model = Model(inputs=input, outputs=output)
 
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+
     model.compile(loss='categorical_crossentropy',
-                  optimizer='adam',
+                  optimizer=adam,
                   metrics=["categorical_accuracy"])
 
     return model
@@ -202,16 +209,17 @@ def gmd_classifier():
     filters = 8
     cs = (4, 4, 4)
 
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
-    x = MaxPooling3D(pool_size=pool_size)(x)
+  #  x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
+   # x = MaxPooling3D(pool_size=pool_size)(x)
+
+   # x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
+   # x = MaxPooling3D(pool_size=pool_size)(x)
+
+  #  x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
+   # x = MaxPooling3D(pool_size=pool_size)(x)
 
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
-    x = MaxPooling3D(pool_size=pool_size)(x)
-
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
-    x = MaxPooling3D(pool_size=pool_size)(x)
-
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
 
     encoder = Flatten(name='encoded')(x)
 
@@ -223,6 +231,52 @@ def gmd_classifier():
     x = Dense(2, activation='softmax')(x)
 
     model = Model(inputs=inputs, outputs=x)
+
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=adam,
+                  metrics=["categorical_accuracy"])
+
+    return model
+
+
+def merged_gmd_classifier():
+    inputs_gmd = Input(shape=input_size)
+    inputs_age = Input(shape=single_input_size)
+    inputs_site = Input(shape=single_input_size)
+    inputs_gender = Input(shape=single_input_size)
+    inputs_tiv = Input(shape=single_input_size)
+    inputs_mean = Input(shape=mean_input_size)
+    inputs_var = Input(shape=mean_input_size)
+
+    padding = 'valid'
+    strides = 2
+    filters = 8
+    cs = (4, 4, 4)
+
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs_gmd)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
+
+    x_gmd = Flatten(name='encoded')(x)
+
+    x_mean = Dense(50, activation=activation_function)(inputs_mean)
+    x_var = Dense(50, activation=activation_function)(inputs_var)
+
+    single_concat = concatenate([inputs_age, inputs_site, inputs_gender, inputs_tiv])
+    dense_single = Dense(4, activation=activation_function)(single_concat)
+
+    x = concatenate([x_gmd, x_mean, x_var, dense_single])
+
+    x = Dense(50, activation=activation_function)(x)
+
+    x = Dropout(0.5)(x)
+
+    x = Dense(10, activation=activation_function)(x)
+    x = Dense(2, activation='softmax')(x)
+
+    model = Model(inputs=[inputs_gmd, inputs_age, inputs_site, inputs_gender, inputs_tiv, inputs_mean, inputs_var],
+                  outputs=x)
 
     adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
 
@@ -271,8 +325,10 @@ def cae_classifier_one_hot_model():
 
     model = Model(encoder.input, top_level(encoder.output))
 
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+
     model.compile(loss='categorical_crossentropy',
-                  optimizer='adam',
+                  optimizer=adam,
                   metrics=["categorical_accuracy"])
 
     return model
@@ -284,8 +340,10 @@ def cae_classifier_model():
 
     model = Model(encoder.input, top_level(encoder.output))
 
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+
     model.compile(loss='categorical_crossentropy',
-                  optimizer='adam',
+                  optimizer=adam,
                   metrics=["categorical_accuracy"])
 
     return model
@@ -322,11 +380,8 @@ def merged_classifier():
     #
     # x = Flatten()(x)
 
-    x1 = Dense(100, activation=activation_function, )(inputs_mean)
+    x1 = Dense(100, activation=activation_function)(inputs_mean)
     x2 = Dense(100, activation=activation_function)(inputs_var)
-
-    x1 = Dropout(0.5)(x1)
-    x2 = Dropout(0.5)(x2)
 
     single_concat = concatenate([inputs_age, inputs_site, inputs_gender, inputs_tiv])
     dense_single = Dense(4, activation=activation_function)(single_concat)
@@ -354,8 +409,10 @@ def merged_classifier():
     model = Model(inputs=[inputs_gmd, inputs_age, inputs_site, inputs_gender, inputs_tiv, inputs_mean, inputs_var],
                   outputs=x)
 
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+
     model.compile(loss='categorical_crossentropy',
-                  optimizer='adam',
+                  optimizer=adam,
                   metrics=["categorical_accuracy"])
 
     return model
@@ -411,12 +468,9 @@ def batch(indices, f):
         np.random.shuffle(indices)
 
         for index in indices:
-            try:
-                label = labels[index]
+            label = labels[index]
 
-                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...], label[np.newaxis, ...])
-            except:
-                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...])
+            yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...], label[np.newaxis, ...])
 
 
 def batch_cae(indices, f):
@@ -427,11 +481,8 @@ def batch_cae(indices, f):
         np.random.shuffle(indices)
 
         for index in indices:
-            try:
-                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...],
-                       np.reshape(labels[index, ...], input_size)[np.newaxis, ...])
-            except:
-                yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...])
+            yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...],
+                   np.reshape(labels[index, ...], input_size)[np.newaxis, ...])
 
 
 def get_nifti_data():
@@ -546,7 +597,7 @@ def test_mean_classifer(model, test_indices, f):
             print("%i I " % i, label, prediction)
 
 
-def test_merged_classifer(model, test_indices, f):
+def test_merged_classifier(model, test_indices, f):
     means = f['regional_GMD_mean']
     vars = f['regional_GMD_var']
     images = f['GMD']
@@ -676,14 +727,13 @@ if __name__ == "__main__":
 
     if train_stacked_model:
         print("Training stacked classifier model")
-        #model = cae_classifier_one_hot_model()
-        model = gmd_classifier() # mean_classifier()  #
+        model =  gmd_classifier() # mean_classifier()  # merged_gmd_classifier()
         best_model_filename = results_dir + 'best_stacked_model.hdf5'
         model_filename = results_dir + 'stacked_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_stacked'
-        batch_func = batch  # batch_mean_var  # batch
+        batch_func =  batch # batch_mean_var  # batch_all
         monitor = 'val_categorical_accuracy'
-        test_function = test_gmd_classifier  # test_mean_classifer  #
+        test_function = test_gmd_classifier  # test_mean_classifer  #  test_merged_classifier
     else:
         print("Training 3D convolutional autoencoder")
         model = cae_model()
