@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 
 workdir = os.path.expanduser('~/pac2018_root/')
 cae_model_file = workdir + 'experiment-268/best_3d_cae_model.hdf5'  # 'experiment-1/3d_cae_model.hdf5' 62 is deep, 1 is shallow
+strided_gmd_classifier = workdir + 'experiment-350/best_stacked_model.hdf5'
 data_file = 'pac2018.hdf5'
 average_image_file = workdir + 'average_nifti.nii'
 
@@ -220,6 +221,7 @@ def gmd_classifier():
 
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
 
     encoder = Flatten(name='encoded')(x)
 
@@ -257,6 +259,7 @@ def merged_gmd_classifier():
 
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs_gmd)
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
 
     x_gmd = Flatten(name='encoded')(x)
 
@@ -267,6 +270,50 @@ def merged_gmd_classifier():
     dense_single = Dense(4, activation=activation_function)(single_concat)
 
     x = concatenate([x_gmd, x_mean, x_var, dense_single])
+
+    x = Dense(50, activation=activation_function)(x)
+
+    x = Dropout(0.5)(x)
+
+    x = Dense(10, activation=activation_function)(x)
+    x = Dense(2, activation='softmax')(x)
+
+    model = Model(inputs=[inputs_gmd, inputs_age, inputs_site, inputs_gender, inputs_tiv, inputs_mean, inputs_var],
+                  outputs=x)
+
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=adam,
+                  metrics=["categorical_accuracy"])
+
+    return model
+
+
+def strided_merged_classifier():
+    inputs_gmd = Input(shape=input_size)
+    inputs_age = Input(shape=single_input_size)
+    inputs_site = Input(shape=single_input_size)
+    inputs_gender = Input(shape=single_input_size)
+    inputs_tiv = Input(shape=single_input_size)
+    inputs_mean = Input(shape=mean_input_size)
+    inputs_var = Input(shape=mean_input_size)
+
+    saved_gmd_classifier = load_model(strided_gmd_classifier)
+    cutoff_layer_name = 'dense_1'
+    gmd_model = Model(inputs=saved_gmd_classifier.input,
+                      outputs=saved_gmd_classifier.get_layer(cutoff_layer_name).output)
+
+    for layer in gmd_model.layers:
+        layer.trainable = False
+
+    x_mean = Dense(50, activation=activation_function)(inputs_mean)
+    x_var = Dense(50, activation=activation_function)(inputs_var)
+
+    single_concat = concatenate([inputs_age, inputs_site, inputs_gender, inputs_tiv])
+    dense_single = Dense(4, activation=activation_function)(single_concat)
+
+    x = concatenate([gmd_model(inputs_gmd), x_mean, x_var, dense_single])
 
     x = Dense(50, activation=activation_function)(x)
 
@@ -690,7 +737,7 @@ def setup_experiment(workdir):
 if __name__ == "__main__":
     results_dir, experiment_number = setup_experiment(workdir)
 
-    #summarize_saved_model(workdir + 'experiment-307/stacked_model.hdf5')
+    # summarize_saved_model(workdir + 'experiment-350/stacked_model.hdf5')
 
     f = h5py.File(workdir + data_file, 'r')
     images = f['GMD']
@@ -727,13 +774,13 @@ if __name__ == "__main__":
 
     if train_stacked_model:
         print("Training stacked classifier model")
-        model =  gmd_classifier() # mean_classifier()  # merged_gmd_classifier()
+        model = strided_merged_classifier() # merged_gmd_classifier() # mean_classifier()  # gmd_classifier()
         best_model_filename = results_dir + 'best_stacked_model.hdf5'
         model_filename = results_dir + 'stacked_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_stacked'
-        batch_func =  batch # batch_mean_var  # batch_all
+        batch_func =  batch_all # batch_mean_var  # batch
         monitor = 'val_categorical_accuracy'
-        test_function = test_gmd_classifier  # test_mean_classifer  #  test_merged_classifier
+        test_function = test_merged_classifier  # test_mean_classifer  #  test_gmd_classifier
     else:
         print("Training 3D convolutional autoencoder")
         model = cae_model()
