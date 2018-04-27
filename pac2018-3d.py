@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 
 workdir = os.path.expanduser('~/pac2018_root/')
 cae_model_file = workdir + 'experiment-268/best_3d_cae_model.hdf5'  # 'experiment-1/3d_cae_model.hdf5' 62 is deep, 1 is shallow
-strided_gmd_classifier = workdir + 'experiment-350/best_stacked_model.hdf5'
+strided_gmd_classifier = workdir + 'experiment-348/best_stacked_model.hdf5' # 350 2 mil, 348 8 mil
 data_file = 'pac2018.hdf5'
 average_image_file = workdir + 'average_nifti.nii'
 
@@ -222,6 +222,8 @@ def gmd_classifier():
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
 
     encoder = Flatten(name='encoded')(x)
 
@@ -233,6 +235,41 @@ def gmd_classifier():
     x = Dense(2, activation='softmax')(x)
 
     model = Model(inputs=inputs, outputs=x)
+
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=adam,
+                  metrics=["categorical_accuracy"])
+
+    return model
+
+
+def no_gmd_classifier():
+    inputs_age = Input(shape=single_input_size)
+    inputs_site = Input(shape=single_input_size)
+    inputs_gender = Input(shape=single_input_size)
+    inputs_tiv = Input(shape=single_input_size)
+    inputs_mean = Input(shape=mean_input_size)
+    inputs_var = Input(shape=mean_input_size)
+
+    x_mean = Dense(50, activation=activation_function)(inputs_mean)
+    x_var = Dense(50, activation=activation_function)(inputs_var)
+
+    single_concat = concatenate([inputs_age, inputs_site, inputs_gender, inputs_tiv])
+    dense_single = Dense(4, activation=activation_function)(single_concat)
+
+    x = concatenate([x_mean, x_var, dense_single])
+
+    x = Dense(50, activation=activation_function)(x)
+
+    x = Dropout(0.5)(x)
+
+    x = Dense(10, activation=activation_function)(x)
+    x = Dense(2, activation='softmax')(x)
+
+    model = Model(inputs=[inputs_age, inputs_site, inputs_gender, inputs_tiv, inputs_mean, inputs_var],
+                  outputs=x)
 
     adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
 
@@ -507,6 +544,30 @@ def batch_all(indices, f):
                    label[np.newaxis, ...])
 
 
+def batch_no_gmd(indices, f):
+    mean = f['regional_GMD_mean']
+    var = f['regional_GMD_var']
+    labels = f['one_hot_label']
+    age = f['age']
+    site = f['site']
+    gender = f['gender']
+    tiv = f['tiv']
+
+    while True:
+        np.random.shuffle(indices)
+
+        for index in indices:
+            label = labels[index]
+
+            yield ([age[index, ...][np.newaxis, ...],
+                    site[index, ...][np.newaxis, ...],
+                    gender[index, ...][np.newaxis, ...],
+                    tiv[index, ...][np.newaxis, ...],
+                    mean[index, ...][np.newaxis, ...],
+                    var[index, ...][np.newaxis, ...]],
+                   label[np.newaxis, ...])
+
+
 def batch(indices, f):
     images = f['GMD']
     labels = f['one_hot_label']
@@ -644,6 +705,38 @@ def test_mean_classifer(model, test_indices, f):
             print("%i I " % i, label, prediction)
 
 
+def test_no_gmd_classifier(model, test_indices, f):
+    means = f['regional_GMD_mean']
+    vars = f['regional_GMD_var']
+    labels = f['one_hot_label']
+    ages = f['age']
+    sites = f['site']
+    genders = f['gender']
+    tivs = f['tiv']
+
+    for i in test_indices:
+        label = labels[i]
+        mean = means[i]
+        var = vars[i]
+        age = ages[i]
+        site = sites[i]
+        gender = genders[i]
+        tiv = tivs[i]
+
+        output = model.predict([age, site, gender, tiv, mean, var])[0]
+        #print(output)
+        pred = np.argmax(output, axis=-1)  # axis=-1, last axis
+
+        prediction = [1, 0]
+        if pred == 1:
+            prediction = [0, 1]
+
+        if np.array_equal(prediction, label):
+            print("%i C " % i, label, prediction)
+        else:
+            print("%i I " % i, label, prediction)
+
+
 def test_merged_classifier(model, test_indices, f):
     means = f['regional_GMD_mean']
     vars = f['regional_GMD_var']
@@ -753,7 +846,7 @@ if __name__ == "__main__":
     train_indices = pac2018_indices
     train_labels = labels
 
-    sss_validation = StratifiedShuffleSplit(n_splits=1, test_size=0.3, random_state=42)
+    sss_validation = StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=42)
     sss_test = StratifiedShuffleSplit(n_splits=1, test_size=0.5, random_state=42)
 
     train_indices, validation_indices, test_indices = None, None, None
@@ -774,13 +867,13 @@ if __name__ == "__main__":
 
     if train_stacked_model:
         print("Training stacked classifier model")
-        model = strided_merged_classifier() # merged_gmd_classifier() # mean_classifier()  # gmd_classifier()
+        model = gmd_classifier()  # no_gmd_classifier() # merged_gmd_classifier() # mean_classifier()  # strided_merged_classifier()
         best_model_filename = results_dir + 'best_stacked_model.hdf5'
         model_filename = results_dir + 'stacked_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_stacked'
-        batch_func =  batch_all # batch_mean_var  # batch
+        batch_func = batch  # batch_all  # batch_no_gmd # batch_mean_var  # batch
         monitor = 'val_categorical_accuracy'
-        test_function = test_merged_classifier  # test_mean_classifer  #  test_gmd_classifier
+        test_function = test_gmd_classifier  # test_no_gmd_classifier  # test_mean_classifer  #  test_merged_classifier
     else:
         print("Training 3D convolutional autoencoder")
         model = cae_model()
