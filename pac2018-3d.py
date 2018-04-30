@@ -7,6 +7,7 @@ from keras.models import load_model
 from keras.applications.inception_v3 import InceptionV3
 from keras.optimizers import SGD, Adam
 from keras.utils import to_categorical
+from keras import regularizers
 from numpy.random import seed
 from tensorflow import set_random_seed
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
@@ -18,6 +19,7 @@ import pickle
 import matplotlib as mpl
 import keras.backend as K
 import os
+import random
 
 mpl.use('Agg')
 import matplotlib.pyplot as plt
@@ -52,6 +54,10 @@ train_stacked_model = True
 cae_filter_count = 8
 cae_output_shape = (5, 5, 5, cae_filter_count*2)  # (34, 34, 34, 8)
 cae_output_count = cae_output_shape[0]*cae_output_shape[1]*cae_output_shape[2]*cae_output_shape[3]
+
+activity_reg = None
+kernel_reg = None
+bias_reg = None  # regularizers.l2(0.01)
 
 layers_to_watch = ['classifier_input', 'output']
 
@@ -219,11 +225,21 @@ def gmd_classifier():
   #  x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
    # x = MaxPooling3D(pool_size=pool_size)(x)
 
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
+               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(inputs)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
+               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
+               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
+               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
+               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
+
+    x = Dropout(0.2)(x)
+
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
+               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
 
     encoder = Flatten(name='encoded')(x)
 
@@ -581,6 +597,40 @@ def batch(indices, f):
             yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...], label[np.newaxis, ...])
 
 
+def balanced_batch(indices, f):
+    images = f['GMD']
+    labels = f['one_hot_label'].value
+
+    zero_indices = np.where((labels == (1, 0)).all(axis=1))[0]
+    one_indices = np.where((labels == (0, 1)).all(axis=1))[0]
+
+    while True:
+        np.random.shuffle(indices)
+
+        zi = -1
+        oi = -1
+
+        for index in zero_indices:
+            label = labels[index]
+            other_index = 0
+            if np.array_equal(label, [1, 0]):
+                oi += 1
+                other_index = one_indices[oi]
+            else:
+                zi += 1
+                other_index = zero_indices[zi]
+
+            if zi >= len(zero_indices) - 1:
+                zi = -1
+            if oi >= len(one_indices) - 1:
+                oi = -1
+
+            yield (np.array([np.reshape(images[index, ...], input_size),
+                            np.reshape(images[other_index, ...], input_size)]),
+                   np.array([label,
+                            labels[other_index]]))
+
+
 def batch_cae(indices, f):
     images = f['GMD']
     labels = f['GMD']
@@ -835,6 +885,7 @@ if __name__ == "__main__":
     f = h5py.File(workdir + data_file, 'r')
     images = f['GMD']
     labels = f['label'].value
+    one_hot_labels = f['one_hot_label'].value
 
     class_weights = class_weight.compute_class_weight('balanced', np.unique(labels), labels)
 
@@ -846,7 +897,7 @@ if __name__ == "__main__":
     train_indices = pac2018_indices
     train_labels = labels
 
-    sss_validation = StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=42)
+    sss_validation = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
     sss_test = StratifiedShuffleSplit(n_splits=1, test_size=0.5, random_state=42)
 
     train_indices, validation_indices, test_indices = None, None, None
@@ -867,13 +918,16 @@ if __name__ == "__main__":
 
     if train_stacked_model:
         print("Training stacked classifier model")
-        model = gmd_classifier()  # no_gmd_classifier() # merged_gmd_classifier() # mean_classifier()  # strided_merged_classifier()
+        model = gmd_classifier()  # no_gmd_classifier() # merged_gmd_classifier() # mean_classifier()
+        #  strided_merged_classifier()
         best_model_filename = results_dir + 'best_stacked_model.hdf5'
         model_filename = results_dir + 'stacked_model.hdf5'
         metrics_filename = results_dir + 'test_metrics_stacked'
-        batch_func = batch  # batch_all  # batch_no_gmd # batch_mean_var  # batch
+        batch_func = batch  # batch_all  # batch_no_gmd # batch_mean_var  # batch # balanced_batch
         monitor = 'val_categorical_accuracy'
         test_function = test_gmd_classifier  # test_no_gmd_classifier  # test_mean_classifer  #  test_merged_classifier
+        zero_indices = np.where((one_hot_labels == (1, 0)).all(axis=1))[0]
+        steps_per_epoch = len(train_indices)  # len(train_indices) # len(zero_indices)
     else:
         print("Training 3D convolutional autoencoder")
         model = cae_model()
@@ -882,6 +936,7 @@ if __name__ == "__main__":
         metrics_filename = results_dir + 'test_metrics_3d_cae'
         batch_func = batch_cae
         monitor = 'val_loss'
+        steps_per_epoch = len(train_indices)
 
     # print summary of model
     model.summary()
@@ -900,7 +955,7 @@ if __name__ == "__main__":
 
     hist = model.fit_generator(
         batch_func(train_indices, f),
-        len(train_indices),
+        steps_per_epoch,
         epochs=num_epochs,
         callbacks=[model_checkpoint, tensorboard],  # , early_stopping
         validation_data=batch_func(validation_indices, f),
