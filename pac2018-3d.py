@@ -31,7 +31,8 @@ import matplotlib.pyplot as plt
 
 workdir = os.path.expanduser('~/pac2018_root/')
 cae_model_file = workdir + 'experiment-268/best_3d_cae_model.hdf5'  # 'experiment-1/3d_cae_model.hdf5' 62 is deep, 1 is shallow
-strided_gmd_classifier = workdir + 'experiment-348/best_stacked_model.hdf5' # 350 2 mil, 348 8 mil
+strided_gmd_classifier = workdir + 'experiment-442/best_stacked_model.hdf5' # 350 2 mil, 348 8 mil
+# 442 29000
 data_file = 'pac2018.hdf5'
 average_image_file = workdir + 'average_nifti.nii'
 
@@ -215,6 +216,7 @@ def gmd_classifier():
     strides = 2
     filters = 8
     cs = (4, 4, 4)
+    dropout = 0.3
 
   #  x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
    # x = MaxPooling3D(pool_size=pool_size)(x)
@@ -227,16 +229,31 @@ def gmd_classifier():
 
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
                activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(inputs)
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
-               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
-               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
-               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
+
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
                activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
 
-    x = Dropout(0.2)(x)
+    x = Dropout(dropout)(x)
+
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
+               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
+
+    x = Dropout(dropout)(x)
+
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
+               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
+
+    x = Dropout(dropout)(x)
+
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
+               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
+
+    x = Dropout(dropout)(x)
+
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
+               activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
+
+    x = Dropout(dropout)(x)
 
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function,
                activity_regularizer=activity_reg, bias_regularizer=bias_reg, kernel_regularizer=kernel_reg)(x)
