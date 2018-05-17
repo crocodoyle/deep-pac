@@ -1,28 +1,14 @@
 from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Activation, Conv3D, MaxPooling3D, Flatten, BatchNormalization, TimeDistributed
+from keras.layers import Dense, Dropout, Activation, Conv3D, MaxPooling3D, Flatten, BatchNormalization
 from keras.layers import Conv3DTranspose, Reshape, UpSampling3D, Input, Lambda, ZeroPadding3D, Cropping3D
-from keras.layers import Conv2D, MaxPooling2D, concatenate
-from keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard, ReduceLROnPlateau
-from keras.models import load_model
-from keras.applications.inception_v3 import InceptionV3
+from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
 from keras.optimizers import SGD, Adam
-from keras.utils import to_categorical
-from keras import regularizers
-from numpy.random import seed
-from tensorflow import set_random_seed
-from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.utils import class_weight
-import nibabel as nib
 import numpy as np
 import h5py
 import pickle
-import matplotlib as mpl
-import keras.backend as K
 import os
-import random
-
-mpl.use('Agg')
-import matplotlib.pyplot as plt
 
 workdir = os.path.expanduser('~/pac2018_root/')
 
@@ -31,8 +17,6 @@ data_file = 'pac2018.hdf5'
 image_size = (152, 152, 152)     # (121, 145, 121) is original size, resized in make_dataset.py
 input_size = (152, 152, 152, 1)  # Input size to classifier
 
-cae_loss_function = 'binary_crossentropy'
-cae_optimizer = 'adam'
 activation_function = 'relu'
 
 
