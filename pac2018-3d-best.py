@@ -187,7 +187,7 @@ if __name__ == "__main__":
     # print summary of model
     model.summary()
 
-    num_epochs = 100
+    num_epochs = 1200
 
     model_checkpoint = ModelCheckpoint(best_model_filename,
                                        monitor=monitor,
@@ -195,12 +195,14 @@ if __name__ == "__main__":
     tensorboard = TensorBoard(log_dir='./logs/' + str(experiment_number), histogram_freq=0, write_graph=True,
                               write_grads=True,
                               write_images=True)
+    reduce_lr = ReduceLROnPlateau(monitor='val_categorical_accuracy', factor=0.5,
+                                  patience=10, min_lr=0.0000001)
 
     hist = model.fit_generator(
         batch_func(train_indices, f),
         steps_per_epoch,
         epochs=num_epochs,
-        callbacks=[model_checkpoint, tensorboard],
+        callbacks=[model_checkpoint, tensorboard, reduce_lr],
         validation_data=batch_func(validation_indices, f),
         validation_steps=len(validation_indices), class_weight=class_weights
     )
