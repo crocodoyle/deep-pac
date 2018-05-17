@@ -14,6 +14,9 @@ workdir = os.path.expanduser('~/pac2018_root/')
 
 data_file = 'pac2018.hdf5'
 
+batch_size = 32
+batch_input_size = (batch_size, 152, 152, 152)
+batch_output_size = (batch_size, 152, 152, 152, 1)
 image_size = (152, 152, 152)     # (121, 145, 121) is original size, resized in make_dataset.py
 input_size = (152, 152, 152, 1)  # Input size to classifier
 
@@ -31,19 +34,21 @@ def gmd_classifier():
 
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(inputs)
 
+    x = BatchNormalization()(x)
+
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
+
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
+
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
+
+    x = BatchNormalization()(x)
 
     x = Dropout(dropout)(x)
 
     x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
 
-    x = Dropout(dropout)(x)
-
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
-
-    x = Dropout(dropout)(x)
-
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation=activation_function)(x)
+    x = BatchNormalization()(x)
 
     x = Dropout(dropout)(x)
 
@@ -69,17 +74,32 @@ def gmd_classifier():
     return model
 
 
-def batch(indices, f):
+def batch(indices, f, bs):
     images = f['GMD']
     labels = f['one_hot_label']
 
     while True:
         np.random.shuffle(indices)
 
-        for index in indices:
-            label = labels[index]
+        for j in range(0, len(indices)):
+            idx = indices[j:j+bs]
 
-            yield (np.reshape(images[index, ...], input_size)[np.newaxis, ...], label[np.newaxis, ...])
+            output = np.empty(batch_input_size)
+            lbls = np.empty((bs, 2))
+
+            for i in range(0, bs):
+                id = idx[i]
+                img = images[id, :]
+                output[i, :] = np.reshape(img, image_size)
+                lbls[i, :] = labels[id]
+
+            yield (np.reshape(output, batch_output_size),
+                   lbls)
+
+            if j + bs > len(indices):
+                break
+            else:
+                j += bs
 
 
 def test_gmd_classifier(model, test_indices, f):
@@ -171,7 +191,7 @@ if __name__ == "__main__":
     # print summary of model
     model.summary()
 
-    num_epochs = 1200
+    num_epochs = 100
 
     model_checkpoint = ModelCheckpoint(best_model_filename,
                                        monitor=monitor,
@@ -183,18 +203,18 @@ if __name__ == "__main__":
                                   patience=10, min_lr=0.0000001)
 
     hist = model.fit_generator(
-        batch_func(train_indices, f),
-        steps_per_epoch,
+        batch_func(train_indices, f, batch_size),
+        steps_per_epoch/batch_size,
         epochs=num_epochs,
         callbacks=[model_checkpoint, tensorboard, reduce_lr],
-        validation_data=batch_func(validation_indices, f),
-        validation_steps=len(validation_indices), class_weight=class_weights
+        validation_data=batch_func(validation_indices, f, batch_size),
+        validation_steps=len(validation_indices)/batch_size, class_weight=class_weights
     )
 
     model.load_weights(best_model_filename)
     model.save(model_filename)
 
-    metrics = model.evaluate_generator(batch_func(test_indices, f), len(test_indices))
+    metrics = model.evaluate_generator(batch_func(test_indices, f, batch_size), len(test_indices)/batch_size)
 
     print(model.metrics_names)
     print(metrics)
