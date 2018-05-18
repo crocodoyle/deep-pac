@@ -13,7 +13,9 @@ import os
 workdir = os.path.expanduser('~/pac2018_root/')
 
 data_file = 'pac2018.hdf5'
-
+# 500, 502, 503 are first batchnorm/32 batch sized runs with 100 epochs
+# 454, 455 are decent batchsize=1 100 epochs
+# 458 is best 1200 epoch with batch size 1
 batch_size = 32
 batch_input_size = (batch_size, 152, 152, 152)
 batch_output_size = (batch_size, 152, 152, 152, 1)
@@ -84,16 +86,18 @@ def batch(indices, f, bs):
         for j in range(0, len(indices)):
             idx = indices[j:j+bs]
 
-            output = np.empty(batch_input_size)
-            lbls = np.empty((bs, 2))
+            this_bs = len(idx)
 
-            for i in range(0, bs):
+            output = np.empty(batch_input_size = (this_bs, 152, 152, 152))
+            lbls = np.empty((this_bs, 2))
+
+            for i in range(0, this_bs):
                 id = idx[i]
                 img = images[id, :]
                 output[i, :] = np.reshape(img, image_size)
                 lbls[i, :] = labels[id]
 
-            yield (np.reshape(output, batch_output_size),
+            yield (np.reshape(output, (this_bs, 152, 152, 152, 1)),
                    lbls)
 
             if j + bs > len(indices):
