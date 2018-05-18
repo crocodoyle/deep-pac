@@ -33,7 +33,7 @@ def gmd_classifier():
     filters = 8
     cs = (4, 4, 4)
 
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation='relu')(inputs)
+    x = Conv3D(filters, cs, padding=padding, activation='relu')(inputs)
 
     x = BatchNormalization()(x)
 
@@ -43,7 +43,11 @@ def gmd_classifier():
 
     x = Conv3D(filters*4, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
+    x = Dropout(0.5)(x)
+
     x = Conv3D(filters*4, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
+
+    x = Dropout(0.5)(x)
 
     encoder = Flatten(name='encoded')(x)
 
@@ -59,7 +63,7 @@ def gmd_classifier():
 
     model = Model(inputs=inputs, outputs=x)
 
-    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+    adam = Adam(lr=0.00002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
 
     model.compile(loss='categorical_crossentropy',
                   optimizer=adam,
