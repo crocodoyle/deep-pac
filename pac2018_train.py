@@ -22,7 +22,7 @@ batch_size = 32
 batch_input_size = (batch_size, 121, 145, 121)
 batch_output_size = (batch_size, 121, 145, 121, 1)
 image_size = (121, 145, 121)     # (121, 145, 121) is original size, resized in make_dataset.py
-input_size = (121, 145, 121)     # Input size to classifier
+input_size = (121, 145, 121, 1)     # Input size to classifier
 
 
 def gmd_classifier():
