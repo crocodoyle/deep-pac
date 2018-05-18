@@ -1,6 +1,5 @@
 from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Activation, Conv3D, MaxPooling3D, Flatten, BatchNormalization
-from keras.layers import Conv3DTranspose, Reshape, UpSampling3D, Input, Lambda, ZeroPadding3D, Cropping3D
+from keras.layers import Dense, Dropout, Input, Conv3D, MaxPooling3D, Flatten, BatchNormalization, Concatenate
 from keras.constraints import max_norm
 
 from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
@@ -8,9 +7,9 @@ from keras.optimizers import SGD, Adam
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.utils import class_weight
 import numpy as np
-import h5py
-import pickle
-import os
+
+import h5py, pickle, os
+
 
 workdir = os.path.expanduser('~/pac2018_root/')
 
@@ -21,41 +20,44 @@ data_file = 'pac2018.hdf5'
 batch_size = 32
 batch_input_size = (batch_size, 121, 145, 121)
 batch_output_size = (batch_size, 121, 145, 121, 1)
-image_size = (121, 145, 121)     # (121, 145, 121) is original size, resized in make_dataset.py
+image_size = (121, 145, 121)        # (121, 145, 121) is original size, resized in make_dataset.py
 input_size = (121, 145, 121, 1)     # Input size to classifier
 
 
 def gmd_classifier():
-    inputs = Input(shape=input_size)
+    image = Input(shape=input_size)
+    meta = Input(shape=(4,))
 
     padding = 'same'
     strides = 2
     filters = 8
     cs = (4, 4, 4)
 
-    x = Conv3D(filters, cs, padding=padding, strides=strides, activation='relu')(inputs)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation='relu')(image)
 
     x = BatchNormalization()(x)
 
     x = Conv3D(filters*2, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
+    x = Conv3D(filters*2, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
+
     x = Conv3D(filters*4, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
+
+    x = Dropout(0.5)(x)
 
     x = Conv3D(filters*8, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
     x = Dropout(0.5)(x)
 
-    x = Conv3D(filters*16, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
-
-    x = Dropout(0.5)(x)
-
-    x = Conv3D(filters*32, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
+    x = Conv3D(filters*8, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
     x = Dropout(0.5)(x)
 
     encoder = Flatten(name='encoded')(x)
 
-    x = Dense(128, activation='relu', kernel_constraint=max_norm())(encoder)
+    joined = Concatenate([encoder, meta])
+
+    x = Dense(128, activation='relu', kernel_constraint=max_norm())(joined)
 
     x = Dropout(0.5)(x)
 
@@ -65,7 +67,7 @@ def gmd_classifier():
 
     x = Dense(2, activation='softmax')(x)
 
-    model = Model(inputs=inputs, outputs=x)
+    model = Model(inputs=[image, meta], outputs=x)
 
     adam = Adam(lr=0.00002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
 
@@ -79,6 +81,10 @@ def gmd_classifier():
 def batch(indices, f, bs):
     images = f['GMD']
     labels = f['one_hot_label']
+    sites = f['site']
+    age = f['age']
+    gender = f['gender']
+    tiv = f['tiv']
 
     while True:
         np.random.shuffle(indices)
@@ -90,14 +96,20 @@ def batch(indices, f, bs):
 
             output = np.empty((this_bs, 121, 145, 121))
             lbls = np.empty((this_bs, 2))
+            meta = np.empty((this_bs, 4))
 
             for i in range(0, this_bs):
                 id = idx[i]
                 img = images[id, :]
                 output[i, :] = np.reshape(img, image_size)
                 lbls[i, :] = labels[id]
+                meta[i, 0] = sites[id]
+                meta[i, 1] = age[id]
+                meta[i, 2] = gender[id]
+                meta[i, 3] = tiv[id]
 
             yield (np.reshape(output, (this_bs, 121, 145, 121, 1)),
+                   meta,
                    lbls)
 
             if j + bs > len(indices):
@@ -203,8 +215,7 @@ if __name__ == "__main__":
     tensorboard = TensorBoard(log_dir='./logs/' + str(experiment_number), histogram_freq=0, write_graph=True,
                               write_grads=True,
                               write_images=True)
-    reduce_lr = ReduceLROnPlateau(monitor='val_categorical_accuracy', factor=0.5,
-                                  patience=10, min_lr=0.0000001)
+    reduce_lr = ReduceLROnPlateau(monitor='val_categorical_accuracy', factor=0.5, patience=10, min_lr=0.0000001)
 
     hist = model.fit_generator(
         batch_func(train_indices, f, batch_size),
