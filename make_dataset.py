@@ -18,8 +18,8 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 
-#image_size = (121, 145, 121)
-target_size = (152, 152, 152)
+target_size = (121, 145, 121)
+# target_size = (152, 152, 152)
 
 # taken from DLTK
 def normalise_zero_one(image):
@@ -163,8 +163,8 @@ if __name__ == "__main__":
         f.create_dataset('id', (n_pac2018,), dtype='int32')
         f.create_dataset('GMD', (n_pac2018, target_size[0], target_size[1], target_size[2]), dtype='float32')
 
-        f.create_dataset('regional_GMD_mean', (n_pac2018, n_rois), dtype='float32')
-        f.create_dataset('regional_GMD_var', (n_pac2018, n_rois), dtype='float32')
+        # f.create_dataset('regional_GMD_mean', (n_pac2018, n_rois), dtype='float32')
+        # f.create_dataset('regional_GMD_var', (n_pac2018, n_rois), dtype='float32')
 
         f.create_dataset('label', (n_pac2018,), dtype='uint8')
         f.create_dataset('orig_label', (n_pac2018,), dtype='uint8')
@@ -179,18 +179,18 @@ if __name__ == "__main__":
 
         subjects = parse_covariates()
         subjects = parse_sites(subjects)
-        subjects = parse_regional_GMD(subjects)
+        # subjects = parse_regional_GMD(subjects)
 
         for i, subject in enumerate(subjects):
             gmd_filepath = data_dir + subject['id'] + '.nii'
             gmd_img = nib.load(gmd_filepath).get_data()
 
-            gmd_img = resize_image_with_crop_or_pad(gmd_img, target_size, mode='constant')
+            # gmd_img = resize_image_with_crop_or_pad(gmd_img, target_size, mode='constant')
 
             f['id'][i] = int(subject['id'][8:])
             f['GMD'][i, ...] = gmd_img
-            f['regional_GMD_mean'][i, ...] = subject['regional_GMD_mean']
-            f['regional_GMD_var'][i, ...] = subject['regional_GMD_var']
+            # f['regional_GMD_mean'][i, ...] = subject['regional_GMD_mean']
+            # f['regional_GMD_var'][i, ...] = subject['regional_GMD_var']
             if subject['label'] == 2:
                 f['label'][i] = 1
                 f['one_hot_label'][i] = [0, 1]
