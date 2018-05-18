@@ -27,7 +27,7 @@ input_size = (121, 145, 121, 1)     # Input size to classifier
 
 def gmd_classifier():
     image = Input(shape=input_size)
-    meta = Input(shape=(4,))
+    meta = Input(shape=(7,))
 
     padding = 'same'
     strides = 2
