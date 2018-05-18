@@ -1,6 +1,7 @@
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Input, Conv3D, MaxPooling3D, Flatten, BatchNormalization, concatenate
 from keras.constraints import max_norm
+from keras.utils import to_categorical
 
 from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
 from keras.optimizers import SGD, Adam
@@ -53,9 +54,9 @@ def gmd_classifier():
 
     joined = concatenate([flat, meta])
 
-    x = Dense(128, activation='relu', kernel_constraint=max_norm())(joined)
+    x = Dense(64, activation='relu', kernel_constraint=max_norm())(joined)
 
-    x = Dense(128, activation='relu', kernel_constraint=max_norm())(x)
+    x = Dense(64, activation='relu', kernel_constraint=max_norm())(x)
 
     x = Dropout(0.5)(x)
 
@@ -90,17 +91,17 @@ def batch(indices, f, bs):
 
             output = np.empty((this_bs, 121, 145, 121))
             lbls = np.empty((this_bs, 2))
-            meta = np.empty((this_bs, 4))
+            meta = np.empty((this_bs, 7))
 
             for i in range(0, this_bs):
                 id = idx[i]
                 img = images[id, :]
                 output[i, :] = np.reshape(img, image_size)
                 lbls[i, :] = labels[id]
-                meta[i, 0] = sites[id]
-                meta[i, 1] = age[id]
-                meta[i, 2] = gender[id]
-                meta[i, 3] = tiv[id]
+                meta[i, 0:2] = to_categorical(sites[id], num_classes=3)
+                meta[i, 3] = age[id] / 100
+                meta[i, 4:5] = to_categorical(gender[id], num_classes=2)
+                meta[i, 6] = tiv[id] / 2000
 
             yield ([np.reshape(output, (this_bs, 121, 145, 121, 1)),
                    meta],
@@ -120,11 +121,16 @@ def test_gmd_classifier(model, test_indices, f):
     gender = f['gender']
     tiv = f['tiv']
 
+    meta = np.empty((1, 7))
+
     for i in test_indices:
         img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
         label = labels[i]
 
-        meta = [sites[i], age[i], gender[i], tiv[i]]
+        meta[0, 0:2] = to_categorical(sites[id], num_classes=3)
+        meta[0, 3] = age[id] / 100
+        meta[0, 4:5] = to_categorical(gender[id], num_classes=2)
+        meta[0, 6] = tiv[id] / 2000
 
         output = model.predict([img, meta])[0]
         #print(output)
