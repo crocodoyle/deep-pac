@@ -1,5 +1,5 @@
 from keras.models import Sequential, Model
-from keras.layers import Dense, Dropout, Input, Conv3D, MaxPooling3D, Flatten, BatchNormalization, Concatenate
+from keras.layers import Dense, Dropout, Input, Conv3D, MaxPooling3D, Flatten, BatchNormalization, concatenate
 from keras.constraints import max_norm
 
 from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
@@ -53,9 +53,11 @@ def gmd_classifier():
 
     x = Dropout(0.5)(x)
 
-    encoder = Flatten(name='encoded')(x)
+    flat = Flatten(name='encoded')(x)
 
-    x = Dense(128, activation='relu', kernel_constraint=max_norm())(Concatenate([encoder, meta]))
+    joined = concatenate([flat, meta])
+
+    x = Dense(128, activation='relu', kernel_constraint=max_norm())(joined)
 
     x = Dropout(0.5)(x)
 
