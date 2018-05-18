@@ -88,7 +88,7 @@ def batch(indices, f, bs):
 
             this_bs = len(idx)
 
-            output = np.empty(batch_input_size = (this_bs, 152, 152, 152))
+            output = np.empty((this_bs, 152, 152, 152))
             lbls = np.empty((this_bs, 2))
 
             for i in range(0, this_bs):
