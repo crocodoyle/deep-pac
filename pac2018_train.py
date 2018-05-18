@@ -55,9 +55,7 @@ def gmd_classifier():
 
     encoder = Flatten(name='encoded')(x)
 
-    joined = Concatenate()([encoder, meta])
-
-    x = Dense(128, activation='relu', kernel_constraint=max_norm())(joined)
+    x = Dense(128, activation='relu', kernel_constraint=max_norm())(Concatenate([encoder, meta]))
 
     x = Dropout(0.5)(x)
 
