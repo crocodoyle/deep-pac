@@ -98,9 +98,9 @@ def batch(indices, f, bs):
                 img = images[id, :]
                 output[i, :] = np.reshape(img, image_size)
                 lbls[i, :] = labels[id]
-                meta[i, 0:3] = to_categorical(sites[id], num_classes=3)
+                meta[i, 0:3] = to_categorical(sites[id] - 1, num_classes=3)
                 meta[i, 3] = age[id] / 100
-                meta[i, 4:6] = to_categorical(gender[id], num_classes=2)
+                meta[i, 4:6] = to_categorical(gender[id] - 1, num_classes=2)
                 meta[i, 6] = tiv[id] / 2000
 
             yield ([np.reshape(output, (this_bs, 121, 145, 121, 1)),
@@ -127,9 +127,9 @@ def test_gmd_classifier(model, test_indices, f):
         img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
         label = labels[i]
 
-        meta[0, 0:2] = to_categorical(sites[id], num_classes=3)
+        meta[0, 0:2] = to_categorical(sites[id] - 1, num_classes=3)
         meta[0, 3] = age[id] / 100
-        meta[0, 4:5] = to_categorical(gender[id], num_classes=2)
+        meta[0, 4:5] = to_categorical(gender[id] - 1, num_classes=2)
         meta[0, 6] = tiv[id] / 2000
 
         output = model.predict([img, meta])[0]
