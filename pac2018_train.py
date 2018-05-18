@@ -45,8 +45,6 @@ def gmd_classifier():
 
     x = Conv3D(filters, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
-    x = Dropout(0.5)(x)
-
     x = Conv3D(filters, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
     x = Dropout(0.5)(x)
@@ -56,10 +54,6 @@ def gmd_classifier():
     joined = concatenate([flat, meta])
 
     x = Dense(128, activation='relu', kernel_constraint=max_norm())(joined)
-
-    x = BatchNormalization()(x)
-
-    x = Dropout(0.5)(x)
 
     x = Dense(128, activation='relu', kernel_constraint=max_norm())(x)
 
