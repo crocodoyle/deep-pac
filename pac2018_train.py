@@ -108,8 +108,8 @@ def batch(indices, f, bs):
                 meta[i, 2] = gender[id]
                 meta[i, 3] = tiv[id]
 
-            yield (np.reshape(output, (this_bs, 121, 145, 121, 1)),
-                   meta,
+            yield ([np.reshape(output, (this_bs, 121, 145, 121, 1)),
+                   meta],
                    lbls)
 
             if j + bs > len(indices):
@@ -121,12 +121,18 @@ def batch(indices, f, bs):
 def test_gmd_classifier(model, test_indices, f):
     images = f['GMD']
     labels = f['one_hot_label']
+    sites = f['site']
+    age = f['age']
+    gender = f['gender']
+    tiv = f['tiv']
 
     for i in test_indices:
         img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
         label = labels[i]
 
-        output = model.predict(img)[0]
+        meta = [sites[i], age[i], gender[i], tiv[i]]
+
+        output = model.predict([img, meta])[0]
         #print(output)
         pred = np.argmax(output, axis=-1)  # axis=-1, last axis
 
