@@ -33,19 +33,23 @@ def gmd_classifier():
     filters = 8
     cs = (4, 4, 4)
 
-    x = Conv3D(filters, cs, padding=padding, activation='relu')(inputs)
+    x = Conv3D(filters, cs, padding=padding, strides=strides, activation='relu')(inputs)
 
     x = BatchNormalization()(x)
 
     x = Conv3D(filters*2, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
-    x = Conv3D(filters*2, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
-
     x = Conv3D(filters*4, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
+
+    x = Conv3D(filters*8, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
     x = Dropout(0.5)(x)
 
-    x = Conv3D(filters*4, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
+    x = Conv3D(filters*16, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
+
+    x = Dropout(0.5)(x)
+
+    x = Conv3D(filters*32, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
     x = Dropout(0.5)(x)
 
