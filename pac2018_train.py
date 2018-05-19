@@ -110,7 +110,7 @@ def batch(indices, f, bs):
             if j + bs > len(indices):
                 break
             else:
-                j += bs
+                j += bs - 1
 
 
 def test_gmd_classifier(model, test_indices, f):
@@ -128,9 +128,9 @@ def test_gmd_classifier(model, test_indices, f):
         label = labels[i]
 
         meta[0, 0:3] = to_categorical(sites[i] - 1, num_classes=3)
-        meta[0, 3] = age[id] / 100
+        meta[0, 3] = age[i] / 100
         meta[0, 4:6] = to_categorical(gender[i] - 1, num_classes=2)
-        meta[0, 6] = tiv[id] / 2000
+        meta[0, 6] = tiv[i] / 2000
 
         output = model.predict([img, meta])[0]
         #print(output)
