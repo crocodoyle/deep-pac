@@ -127,9 +127,9 @@ def test_gmd_classifier(model, test_indices, f):
         img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
         label = labels[i]
 
-        meta[0, 0:3] = to_categorical(sites[id] - 1, num_classes=3)
+        meta[0, 0:3] = to_categorical(sites[i] - 1, num_classes=3)
         meta[0, 3] = age[id] / 100
-        meta[0, 4:6] = to_categorical(gender[id] - 1, num_classes=2)
+        meta[0, 4:6] = to_categorical(gender[i] - 1, num_classes=2)
         meta[0, 6] = tiv[id] / 2000
 
         output = model.predict([img, meta])[0]
