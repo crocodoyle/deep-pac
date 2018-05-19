@@ -54,9 +54,11 @@ def gmd_classifier():
 
     joined = concatenate([flat, meta])
 
-    x = Dense(64, activation='relu', kernel_constraint=max_norm())(joined)
+    x = Dense(128, activation='relu', kernel_constraint=max_norm())(joined)
 
-    x = Dense(64, activation='relu', kernel_constraint=max_norm())(x)
+    x = Dropout(0.5)(x)
+
+    x = Dense(32, activation='relu', kernel_constraint=max_norm())(x)
 
     x = Dropout(0.5)(x)
 
