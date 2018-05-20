@@ -66,7 +66,7 @@ def gmd_classifier():
 
     model = Model(inputs=[image, meta], outputs=x)
 
-    adam = Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
 
     model.compile(loss='categorical_crossentropy',
                   optimizer=adam,
