@@ -44,13 +44,13 @@ def gmd_classifier():
 
     x = Conv3D(filters, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
-    x = Conv3D(filters, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
+    x = Conv3D(filters*2, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
-    x = Dropout(0.5)(x)
+    x = Dropout(0.3)(x)
 
-    x = Conv3D(filters, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
+    x = Conv3D(filters*2, cs, padding=padding, strides=strides, kernel_constraint=max_norm(), activation='relu')(x)
 
-    x = Dropout(0.5)(x)
+    x = Dropout(0.3)(x)
 
     flat = Flatten(name='encoded')(x)
 
@@ -60,7 +60,7 @@ def gmd_classifier():
 
     x = Dropout(0.5)(x)
 
-    x = Dense(32, activation='relu', kernel_constraint=max_norm())(x)
+    x = Dense(64, activation='relu', kernel_constraint=max_norm())(x)
 
     x = Dropout(0.5)(x)
 
@@ -68,7 +68,7 @@ def gmd_classifier():
 
     model = Model(inputs=[image, meta], outputs=x)
 
-    adam = Adam(lr=0.0002, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
+    adam = Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=1e-6)
 
     model.compile(loss='categorical_crossentropy',
                   optimizer=adam,
