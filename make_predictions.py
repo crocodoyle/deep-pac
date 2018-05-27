@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     pacwriter = csv.writer(open(data_dir + 'predictions.csv', 'wb'))
 
-    pacwriter.write_row(['PAC_ID', 'Prediction'])
+    pacwriter.writerow(['PAC_ID', 'Prediction'])
     for subj in subjects:
 
         img = nib.load(data_dir + subj['id'] + '.nii').get_data()
@@ -63,6 +63,6 @@ if __name__ == '__main__':
 
         prediction = model.predict([img[np.newaxis, ...], meta])[0]
 
-        pacwriter.write_row([subj['id'], np.argmax(prediction)])
+        pacwriter.writerow([subj['id'], np.argmax(prediction)])
 
 
