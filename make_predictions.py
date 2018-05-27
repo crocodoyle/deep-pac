@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
         print(img.shape)
 
-        prediction = model.predict([img[np.newaxis, ...], meta])[0]
+        prediction = model.predict([img[np.newaxis, ..., np.newaxis], meta])[0]
 
         pacwriter.writerow([subj['id'], np.argmax(prediction)])
 
