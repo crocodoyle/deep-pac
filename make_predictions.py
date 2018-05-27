@@ -47,7 +47,7 @@ if __name__ == '__main__':
     model = load_model(data_dir + model_filename)
     model.summary()
 
-    pacwriter = csv.writer(open(data_dir + 'predictions.csv', 'wb'))
+    pacwriter = csv.writer(open(data_dir + 'predictions.csv', 'w'))
 
     pacwriter.writerow(['PAC_ID', 'Prediction'])
     for subj in subjects:
