@@ -2,6 +2,7 @@ import csv, os
 
 from keras.models import load_model
 from keras.utils import to_categorical
+from keras.backend import K
 
 import nibabel as nib
 import numpy as np
@@ -65,4 +66,5 @@ if __name__ == '__main__':
 
         pacwriter.writerow([subj['id'], np.argmax(prediction)])
 
-
+    pacwriter.close()
+    K.clear_session()
