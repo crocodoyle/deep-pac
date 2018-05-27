@@ -47,22 +47,22 @@ if __name__ == '__main__':
     model = load_model(data_dir + model_filename)
     model.summary()
 
-    with csv.writer(open(data_dir + 'predictions.csv', 'wb')) as prediction_writer:
+    pacwriter = csv.writer(open(data_dir + 'predictions.csv', 'wb'))
 
-        prediction_writer.write_row(['PAC_ID', 'Prediction'])
-        for subj in subjects:
+    pacwriter.write_row(['PAC_ID', 'Prediction'])
+    for subj in subjects:
 
-            img = nib.load(data_dir + subj['id'] + '.nii').get_data()
-            meta = np.empty((1, 7))
-            meta[0, 0:3] = to_categorical(subj['site'] - 1, num_classes=3)
-            meta[0, 3] = subj['age'] / 100
-            meta[0, 4:6] = to_categorical(subj['gender'] - 1, num_classes=2)
-            meta[0, 6] = subj['tiv'] / 2000
+        img = nib.load(data_dir + subj['id'] + '.nii').get_data()
+        meta = np.empty((1, 7))
+        meta[0, 0:3] = to_categorical(subj['site'] - 1, num_classes=3)
+        meta[0, 3] = subj['age'] / 100
+        meta[0, 4:6] = to_categorical(subj['gender'] - 1, num_classes=2)
+        meta[0, 6] = subj['tiv'] / 2000
 
-            print(img.shape)
+        print(img.shape)
 
-            prediction = model.predict([img[np.newaxis, ...], meta])[0]
+        prediction = model.predict([img[np.newaxis, ...], meta])[0]
 
-            prediction_writer.write_row([subj['id'], np.argmax(prediction)])
+        pacwriter.write_row([subj['id'], np.argmax(prediction)])
 
 
