@@ -213,7 +213,7 @@ if __name__ == "__main__":
     # print summary of model
     model.summary()
 
-    num_epochs = 100
+    num_epochs = 200
 
     model_checkpoint = ModelCheckpoint(best_model_filename,
                                        monitor=monitor,
