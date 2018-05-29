@@ -2,7 +2,7 @@ import csv, os
 
 from keras.models import load_model
 from keras.utils import to_categorical
-from keras.backend import K
+from keras import backend as K
 
 import nibabel as nib
 import numpy as np
