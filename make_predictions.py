@@ -48,7 +48,8 @@ if __name__ == '__main__':
     model = load_model(data_dir + model_filename)
     model.summary()
 
-    pacwriter = csv.writer(open(data_dir + 'predictions.csv', 'w'))
+    pac_file = open(data_dir + 'predictions.csv', 'w')
+    pacwriter = csv.writer(pac_file)
 
     pacwriter.writerow(['PAC_ID', 'Prediction'])
     for subj in subjects:
@@ -66,5 +67,5 @@ if __name__ == '__main__':
 
         pacwriter.writerow([subj['id'], np.argmax(prediction)])
 
-    pacwriter.close()
+    pac_file.close()
     K.clear_session()
