@@ -45,8 +45,7 @@ def parse_covariates(data_dir):
 if __name__ == '__main__':
     subjects = parse_covariates(data_dir)
 
-    model = load_model(data_dir + model_filename)
-    model.summary()
+    num_models = 20
 
     pac_file = open(data_dir + 'predictions.csv', 'w')
     pacwriter = csv.writer(pac_file)
@@ -61,11 +60,22 @@ if __name__ == '__main__':
         meta[0, 4:6] = to_categorical(subj['gender'] - 1, num_classes=2)
         meta[0, 6] = subj['tiv'] / 2000
 
-        print(img.shape)
+        predictions = []
+        for model_num in range(num_models):
+            model_filename = 'pac_model_' + str(model_num) + '.hdf5'
+            model = load_model(data_dir + model_filename)
 
-        prediction = model.predict([img[np.newaxis, ..., np.newaxis], meta])[0]
+            prediction = model.predict([img[np.newaxis, ..., np.newaxis], meta])[0]
+            predictions.append(prediction[1])
 
-        pacwriter.writerow([subj['id'], np.argmax(prediction)])
+        print('Predictions:', predictions, np.sum(predictions) / num_models)
+
+        if np.sum(predictions) / num_models >= 0.5:
+            final_prediction = 1
+        else:
+            final_prediction = 0
+
+        pacwriter.writerow([subj['id'], final_prediction])
 
     pac_file.close()
     K.clear_session()

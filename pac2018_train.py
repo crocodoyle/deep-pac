@@ -7,6 +7,8 @@ from keras.callbacks import ModelCheckpoint, TensorBoard, ReduceLROnPlateau
 from keras.optimizers import SGD, Adam
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.utils import class_weight
+from sklearn.metrics import accuracy_score
+
 import numpy as np
 
 import h5py, pickle, os
@@ -123,6 +125,8 @@ def test_gmd_classifier(model, test_indices, f):
 
     meta = np.empty((1, 7))
 
+    true_labels, predictions = [], []
+
     for i in test_indices:
         img = np.reshape(images[i, ...], input_size)[np.newaxis, ...]
         label = labels[i]
@@ -136,15 +140,22 @@ def test_gmd_classifier(model, test_indices, f):
         #print(output)
         pred = np.argmax(output, axis=-1)  # axis=-1, last axis
 
-        prediction = [1, 0]
-        if pred == 1:
-            prediction = [0, 1]
+        predictions.append(pred)
+        true_labels.append(label)
 
-        if np.array_equal(prediction, label):
-            print("%i C " % i, label, prediction)
-        else:
-            print("%i I " % i, label, prediction)
+        # prediction = [1, 0]
+        # if pred == 1:
+        #     prediction = [0, 1]
+        #
+        # if np.array_equal(prediction, label):
+        #     print("%i C " % i, label, prediction)
+        # else:
+        #     print("%i I " % i, label, prediction)
 
+    test_acc = accuracy_score(true_labels, predictions)
+    print('test accuracy:', test_acc)
+
+    return test_acc
 
 def setup_experiment(workdir):
     try:
@@ -181,67 +192,76 @@ if __name__ == "__main__":
     train_indices = pac2018_indices
     train_labels = labels
 
-    sss_validation = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-    sss_test = StratifiedShuffleSplit(n_splits=1, test_size=0.5, random_state=42)
+    train_accs, val_accs, test_accs = [], [], []
 
-    train_indices, validation_indices, test_indices = None, None, None
+    for experiment_num in range(20):
+        sss_validation = StratifiedShuffleSplit(n_splits=1, test_size=0.2)
+        sss_test = StratifiedShuffleSplit(n_splits=1, test_size=0.5)
 
-    for train_index, validation_index in sss_validation.split(np.zeros(len(labels)), labels):
-        train_indices = train_index
-        validation_indices = validation_index
+        train_indices, validation_indices, test_indices = None, None, None
 
-    labs = labels[validation_indices, ...]
+        for train_index, validation_index in sss_validation.split(np.zeros(len(labels)), labels):
+            train_indices = train_index
+            validation_indices = validation_index
 
-    for validation_index, test_index in sss_test.split(np.zeros(len(labs)), labs):
-        validation_indices = validation_index
-        test_indices = test_index
+        labs = labels[validation_indices, ...]
 
-    print('train:', train_indices)
-    print('val:', validation_indices)
-    print('test:', test_indices)
+        for validation_index, test_index in sss_test.split(np.zeros(len(labs)), labs):
+            validation_indices = validation_index
+            test_indices = test_index
 
-    model = gmd_classifier()
-    best_model_filename = results_dir + 'best_stacked_model.hdf5'
-    model_filename = results_dir + 'stacked_model.hdf5'
-    metrics_filename = results_dir + 'test_metrics_stacked'
-    batch_func = batch
-    monitor = 'val_categorical_accuracy'
-    test_function = test_gmd_classifier
-    zero_indices = np.where((one_hot_labels == (1, 0)).all(axis=1))[0]
-    steps_per_epoch = len(train_indices)
+        print('train:', train_indices)
+        print('val:', validation_indices)
+        print('test:', test_indices)
 
-    # print summary of model
-    model.summary()
+        model = gmd_classifier()
+        best_model_filename = results_dir + 'best_stacked_model.hdf5'
+        model_filename = results_dir + 'pac_model_' + str(experiment_num) + '.hdf5'
+        metrics_filename = results_dir + 'test_metrics_stacked'
+        batch_func = batch
+        monitor = 'val_categorical_accuracy'
+        test_function = test_gmd_classifier
+        zero_indices = np.where((one_hot_labels == (1, 0)).all(axis=1))[0]
+        steps_per_epoch = len(train_indices)
 
-    num_epochs = 100
+        # print summary of model
+        model.summary()
 
-    model_checkpoint = ModelCheckpoint(best_model_filename,
-                                       monitor=monitor,
-                                       save_best_only=True)
-    tensorboard = TensorBoard(log_dir='./logs/' + str(experiment_number), histogram_freq=0, write_graph=True,
-                              write_grads=True,
-                              write_images=True)
-    reduce_lr = ReduceLROnPlateau(monitor='val_categorical_accuracy', factor=0.5, patience=10, min_lr=0.0000001)
+        num_epochs = 100
 
-    hist = model.fit_generator(
-        batch_func(train_indices, f, batch_size),
-        steps_per_epoch/batch_size,
-        epochs=num_epochs,
-        callbacks=[model_checkpoint, tensorboard, reduce_lr],
-        validation_data=batch_func(validation_indices, f, batch_size),
-        validation_steps=len(validation_indices)/batch_size, class_weight=class_weights
-    )
+        model_checkpoint = ModelCheckpoint(best_model_filename,
+                                           monitor=monitor,
+                                           save_best_only=True)
+        tensorboard = TensorBoard(log_dir='./logs/' + str(experiment_number), histogram_freq=0, write_graph=True,
+                                  write_grads=True,
+                                  write_images=True)
+        reduce_lr = ReduceLROnPlateau(monitor='val_categorical_accuracy', factor=0.5, patience=10, min_lr=0.0000001)
 
-    model.load_weights(best_model_filename)
-    model.save(model_filename)
+        hist = model.fit_generator(
+            batch_func(train_indices, f, batch_size),
+            steps_per_epoch/batch_size,
+            epochs=num_epochs,
+            callbacks=[model_checkpoint, tensorboard, reduce_lr],
+            validation_data=batch_func(validation_indices, f, batch_size),
+            validation_steps=len(validation_indices)/batch_size, class_weight=class_weights
+        )
 
-    metrics = model.evaluate_generator(batch_func(test_indices, f, batch_size), len(test_indices)/batch_size)
+        model.load_weights(best_model_filename)
+        model.save(model_filename)
 
-    print(model.metrics_names)
-    print(metrics)
+        train_metrics = model.evaluate_generator(batch_func(train_indices, f, batch_size), len(train_indices)/batch_size)
+        val_metrics = model.evaluate_generator(batch_func(validation_indices, f, batch_size), len(validation_indices)/batch_size)
+        test_metrics = model.evaluate_generator(batch_func(test_indices, f, batch_size), len(test_indices)/batch_size)
 
-    pickle.dump(metrics, open(metrics_filename, 'wb'))
+        print(model.metrics_names)
+        print(test_metrics)
 
-    test_function(model, test_indices, f)
+        pickle.dump(test_metrics, open(metrics_filename, 'wb'))
+
+        # test_acc = test_function(model, test_indices, f)
+        train_accs.append(train_metrics[1])
+        val_accs.append(val_metrics[1])
+        test_accs.append(test_metrics[1])
+
 
     print('This experiment brought to you by the number:', experiment_number)
